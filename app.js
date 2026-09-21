@@ -667,8 +667,14 @@ function switchNucleus(nucleusId) {
   showToast(`Cambiado a núcleo: ${state.activeNucleus.name}`);
 }
 
+function newNucleusId() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return 'nuc_' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function createNewNucleus(name) {
-  const newId = 'nuc_' + Date.now();
+  const newId = newNucleusId();
   const defaultCircles = [
     { id: 0, name: 'Círculo 1', color: '#3b82f6', ratio: 0.25 },
     { id: 1, name: 'Círculo 2', color: '#10b981', ratio: 0.50 },
@@ -817,6 +823,23 @@ async function loadUserCloudData() {
     state.nucleiList = nuclei;
     state.activeNucleusId = nuclei[0].id;
     state.activeNucleus = nuclei[0];
+  } else {
+    // Primer inicio de sesion: migramos lo que haya en local a un nucleo propio.
+    const migratedId = newNucleusId();
+    const migrated = {
+      id: migratedId,
+      name: state.activeNucleus.name || 'Núcleo Principal',
+      circles: state.activeNucleus.circles,
+      ownerId: state.user.uid
+    };
+    await saveNucleusDoc(migrated);
+    for (const p of state.participants) {
+      await saveParticipantDoc(migratedId, p);
+    }
+    state.nucleiList = [migrated];
+    state.activeNucleusId = migratedId;
+    state.activeNucleus = migrated;
+    saveLocalState();
   }
   updateNucleusUI();
   listenToNucleusRealtime(state.activeNucleusId);

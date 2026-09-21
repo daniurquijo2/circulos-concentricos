@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(nid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/nuclei/$(nid)/members/$(request.auth.uid));
+    }
+
+    function isOwner(nid) {
+      return signedIn()
+        && get(/databases/$(database)/documents/nuclei/$(nid)).data.ownerId == request.auth.uid;
+    }
+
+    // Índice personal: "en qué núcleos estoy". Cada uno gestiona solo el suyo.
+    match /users/{uid}/nuclei/{nucleusId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /nuclei/{nucleusId} {
+      // Solo los miembros leen el núcleo; nadie puede listar todos los núcleos.
+      allow get: if isMember(nucleusId);
+      allow list: if false;
+
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      // Un miembro puede editar nombre y círculos, pero no cambiar de dueño.
+      allow update: if isMember(nucleusId)
+        && request.resource.data.ownerId == resource.data.ownerId;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /members/{memberId} {
+        allow read: if isMember(nucleusId);
+        // Unirse por invitación: solo puedes añadirte a ti mismo.
+        allow create, update: if signedIn() && request.auth.uid == memberId;
+        // Salir por tu cuenta, o que el dueño te saque.
+        allow delete: if signedIn()
+          && (request.auth.uid == memberId || isOwner(nucleusId));
+      }
+
+      match /participants/{participantId} {
+        allow read, write: if isMember(nucleusId);
+      }
+    }
+
+    // Todo lo no contemplado, denegado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

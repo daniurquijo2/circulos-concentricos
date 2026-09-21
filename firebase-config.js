@@ -1,30 +1,30 @@
-﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut 
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  collection, 
-  onSnapshot, 
-  getDocs, 
-  query, 
-  where 
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  collection,
+  onSnapshot,
+  getDocs,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 
 export const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
+  apiKey: "AIzaSyCeDjPgzfTUfhGSGSmOkYEqXetKkBpXlfs",
+  authDomain: "circulos-concentricos.firebaseapp.com",
+  projectId: "circulos-concentricos",
+  storageBucket: "circulos-concentricos.firebasestorage.app",
+  messagingSenderId: "28754062710",
+  appId: "1:28754062710:web:83aa534d8bc1d1a8d81e57"
 };
 
 let app = null;
@@ -32,7 +32,7 @@ export let auth = null;
 export let db = null;
 
 export function initFirebaseCloud(onAuthCallback) {
-  if (firebaseConfig.apiKey === "TU_API_KEY") {
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "TU_API_KEY") {
     console.log("Modo local activo (localStorage).");
     return;
   }
@@ -40,7 +40,6 @@ export function initFirebaseCloud(onAuthCallback) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
-
     onAuthStateChanged(auth, (user) => {
       if (onAuthCallback) onAuthCallback(user);
     });
@@ -64,54 +63,81 @@ export async function logoutUser() {
   return await signOut(auth);
 }
 
+/* --- Lectura en tiempo real ------------------------------------------- */
+
 export function subscribeToNucleusData(nucleusId, callback) {
   if (!db) return () => {};
 
-  const nucleusRef = doc(db, "nuclei", nucleusId);
-  const unsubNucleus = onSnapshot(nucleusRef, (docSnap) => {
-    let nucleusData = null;
-    if (docSnap.exists()) nucleusData = docSnap.data();
-    
-    const participantsCol = collection(db, "nuclei", nucleusId, "participants");
-    const unsubParticipants = onSnapshot(participantsCol, (querySnap) => {
-      const participants = [];
-      querySnap.forEach((d) => participants.push(d.data()));
-      callback(nucleusData, participants);
-    });
-  });
+  let nucleusData = null;
+  let participants = [];
+  const emit = () => callback(nucleusData, participants);
 
-  return () => unsubNucleus();
+  const unsubNucleus = onSnapshot(
+    doc(db, "nuclei", nucleusId),
+    (snap) => { nucleusData = snap.exists() ? snap.data() : null; emit(); },
+    (err) => console.error("Error leyendo el núcleo:", err)
+  );
+
+  const unsubParticipants = onSnapshot(
+    collection(db, "nuclei", nucleusId, "participants"),
+    (qs) => { participants = qs.docs.map((d) => d.data()); emit(); },
+    (err) => console.error("Error leyendo los participantes:", err)
+  );
+
+  return () => { unsubNucleus(); unsubParticipants(); };
 }
+
+/* --- Escritura --------------------------------------------------------- */
 
 export async function saveParticipantDoc(nucleusId, participant) {
   if (!db) return;
-  const ref = doc(db, "nuclei", nucleusId, "participants", participant.id);
-  await setDoc(ref, participant, { merge: true });
+  await setDoc(doc(db, "nuclei", nucleusId, "participants", participant.id), participant, { merge: true });
 }
 
 export async function deleteParticipantDoc(nucleusId, participantId) {
   if (!db) return;
-  const ref = doc(db, "nuclei", nucleusId, "participants", participantId);
-  await deleteDoc(ref);
+  await deleteDoc(doc(db, "nuclei", nucleusId, "participants", participantId));
 }
 
 export async function saveNucleusDoc(nucleus) {
-  if (!db) return;
-  const ref = doc(db, "nuclei", nucleus.id);
-  await setDoc(ref, nucleus, { merge: true });
+  if (!db || !auth || !auth.currentUser) return;
+  const uid = auth.currentUser.uid;
+
+  // members vive en una subcolección, no dentro del documento.
+  const { members, ...data } = nucleus;
+  if (!data.ownerId) data.ownerId = uid;
+
+  await setDoc(doc(db, "nuclei", nucleus.id), data, { merge: true });
+  await setDoc(doc(db, "nuclei", nucleus.id, "members", uid),
+    { uid, joinedAt: serverTimestamp() }, { merge: true });
+  await setDoc(doc(db, "users", uid, "nuclei", nucleus.id),
+    { id: nucleus.id, name: data.name || "" }, { merge: true });
 }
+
+/* --- Núcleos del usuario ----------------------------------------------- */
 
 export async function getUserNucleiList(userId) {
   if (!db) return [];
-  const q = query(collection(db, "nuclei"), where("members", "array-contains", userId));
-  const snap = await getDocs(q);
+  const index = await getDocs(collection(db, "users", userId, "nuclei"));
   const list = [];
-  snap.forEach(d => list.push(d.data()));
+  for (const entry of index.docs) {
+    try {
+      const snap = await getDoc(doc(db, "nuclei", entry.id));
+      if (snap.exists()) list.push(snap.data());
+    } catch (err) {
+      console.warn("Sin acceso al núcleo", entry.id, err);
+    }
+  }
   return list;
 }
 
 export async function joinNucleusByInvite(nucleusId, userId) {
   if (!db) return;
-  const ref = doc(db, "nuclei", nucleusId);
-  await setDoc(ref, { members: [userId] }, { merge: true });
+  await setDoc(doc(db, "nuclei", nucleusId, "members", userId),
+    { uid: userId, joinedAt: serverTimestamp() }, { merge: true });
+
+  const snap = await getDoc(doc(db, "nuclei", nucleusId));
+  const name = snap.exists() ? (snap.data().name || "Núcleo compartido") : "Núcleo compartido";
+  await setDoc(doc(db, "users", userId, "nuclei", nucleusId),
+    { id: nucleusId, name }, { merge: true });
 }
