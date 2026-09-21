@@ -1,0 +1,240 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Círculos Concéntricos - Gestión de Participantes</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script type="module" src="firebase-config.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- BARRA SUPERIOR -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="10.5" fill="none" stroke="#3A424E" stroke-width="1.2"/>
+          <circle cx="12" cy="12" r="7" fill="none" stroke="#5A6472" stroke-width="1.2"/>
+          <circle cx="12" cy="12" r="3.4" fill="#E8B37A"/>
+        </svg>
+        <span class="brand-name">Círculos</span>
+      </div>
+
+      <div class="bar-divider"></div>
+
+      <div class="nucleus-selector-container">
+        <button id="nucleus-dropdown-btn" class="nucleus-btn" title="Cambiar o crear núcleo">
+          <span class="nucleus-label">Núcleo</span>
+          <span id="current-nucleus-name" class="nucleus-name">Cargando...</span>
+          <svg class="chevron-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+
+        <div id="nucleus-dropdown" class="dropdown-menu hidden">
+          <div class="dropdown-header">Tus Núcleos</div>
+          <ul id="nucleus-list" class="nucleus-list"></ul>
+          <div class="dropdown-divider"></div>
+          <button id="btn-new-nucleus" class="dropdown-action-btn">
+            <span>+</span> Nuevo núcleo
+          </button>
+          <button id="btn-share-nucleus" class="dropdown-action-btn share-btn">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon">
+              <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/>
+            </svg>
+            Copiar enlace de invitación
+          </button>
+        </div>
+      </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btn-customize-circles" class="icon-text-btn" title="Personalizar nombres y colores de los círculos">
+          <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon">
+            <path d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2H4zm1 2h10a1 1 0 011 1v2H4V5a1 1 0 011-1zm11 5v7a1 1 0 01-1 1H5a1 1 0 01-1-1V9h12z"/>
+          </svg>
+          Personalizar
+        </button>
+
+        <div class="auth-status-container">
+          <span id="user-email-display" class="user-email"></span>
+          <button id="btn-auth-action" class="btn-auth">Iniciar sesión</button>
+        </div>
+
+        <button id="btn-toggle-menu" class="btn-toggle-menu" title="Mostrar/Ocultar Menú Lateral">
+          <svg id="menu-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ÁREA PRINCIPAL -->
+    <main class="main-layout">
+      <!-- LIENZO DE CÍRCULOS -->
+      <section id="canvas-container" class="canvas-container">
+        <svg id="circles-canvas" preserveAspectRatio="xMidYMid meet">
+          <g id="circles-layer"></g>
+          <g id="participants-layer"></g>
+        </svg>
+        <div class="staging-hint">Zona exterior · arrastra las fichas a cualquier círculo</div>
+      </section>
+
+      <!-- MENÚ LATERAL FLOTANTE -->
+      <aside id="side-menu" class="side-menu">
+        <div id="side-view-main" class="side-view">
+          <!-- AÑADIR PARTICIPANTE -->
+          <details class="add-participant-card" open>
+            <summary>Añadir participante <span class="summary-plus">+</span></summary>
+            <form id="form-add-participant" class="add-form">
+              <div class="form-group">
+                <label for="input-name">Nombre <span class="required">*</span></label>
+                <input type="text" id="input-name" placeholder="Nombre completo" required />
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="input-age">Edad</label>
+                  <input type="number" id="input-age" placeholder="Ej: 24" min="0" max="130" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="input-comments">Comentarios</label>
+                <textarea id="input-comments" rows="2" placeholder="Observaciones, notas..."></textarea>
+              </div>
+              <button type="submit" class="btn-add-submit" title="Crear participante en el exterior">
+                Añadir a los círculos
+              </button>
+            </form>
+          </details>
+
+          <!-- LISTA DE PARTICIPANTES -->
+          <div class="list-card">
+            <div class="list-header">
+              <h3 class="section-title">Participantes <span id="participant-count">0</span></h3>
+            </div>
+            <div class="list-controls">
+              <label class="toggle-control">
+                <input type="checkbox" id="toggle-group-circles" checked />
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Por círculo</span>
+              </label>
+
+              <div class="sort-control">
+                <label for="select-sort">Ordenar por:</label>
+                <select id="select-sort">
+                  <option value="custom">Orden personalizado (arrastrar)</option>
+                  <option value="alpha">Alfabético (A-Z)</option>
+                  <option value="createdAt">Fecha de añadido</option>
+                  <option value="updatedAt">Última modificación</option>
+                </select>
+              </div>
+            </div>
+            <div id="participants-list-container" class="participants-list-container"></div>
+          </div>
+        </div>
+
+        <!-- VISTA DETALLE -->
+        <div id="side-view-detail" class="side-view hidden">
+          <div class="detail-header">
+            <button id="btn-back-to-list" class="btn-icon-back" title="Volver a la lista">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/>
+              </svg>
+            </button>
+            <h3 class="section-title">Ficha del Participante</h3>
+          </div>
+
+          <form id="form-edit-participant" class="detail-form">
+            <input type="hidden" id="detail-participant-id" />
+            <div class="current-circle-badge" id="detail-circle-badge">
+              Círculo actual: <strong id="detail-circle-name">-</strong>
+            </div>
+            <div class="form-group">
+              <label for="detail-name">Nombre <span class="required">*</span></label>
+              <input type="text" id="detail-name" required />
+            </div>
+            <div class="form-group">
+              <label for="detail-age">Edad</label>
+              <input type="number" id="detail-age" min="0" max="130" />
+            </div>
+            <div class="form-group">
+              <label for="detail-comments">Comentarios</label>
+              <textarea id="detail-comments" rows="4"></textarea>
+            </div>
+            <div class="timestamps-info">
+              <div>Añadido: <span id="detail-created-at">-</span></div>
+              <div>Modificado: <span id="detail-updated-at">-</span></div>
+            </div>
+            <div class="detail-actions">
+              <button type="submit" class="btn-save">Guardar Cambios</button>
+              <button type="button" id="btn-archive-participant" class="btn-archive">Archivar</button>
+              <button type="button" id="btn-delete-participant" class="btn-delete">Eliminar</button>
+            </div>
+          </form>
+        </div>
+      </aside>
+    </main>
+
+    <!-- MODALES -->
+    <div id="modal-new-nucleus" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3>Crear Nuevo Núcleo</h3>
+        <p>Introduce un nombre para este nuevo sistema de círculos:</p>
+        <form id="form-create-nucleus">
+          <input type="text" id="input-new-nucleus-name" placeholder="Ej: Taller de Primavera" required />
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" data-close-modal>Cancelar</button>
+            <button type="submit" class="btn-primary">Crear Núcleo</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="modal-customize-circles" class="modal-overlay hidden">
+      <div class="modal-card wide-modal">
+        <h3>Personalizar Círculos Concéntricos</h3>
+        <p>Modifica el nombre y el color de cada nivel concéntrico:</p>
+        <div id="circle-customizers-container" class="circle-customizers"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" data-close-modal>Cerrar</button>
+          <button type="button" id="btn-save-circle-settings" class="btn-primary">Guardar Configuración</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-auth" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3 id="auth-modal-title">Iniciar Sesión</h3>
+        <p id="auth-modal-desc">Accede a tus círculos desde cualquier dispositivo.</p>
+        <form id="form-auth">
+          <div class="form-group">
+            <label for="auth-email">Correo electrónico</label>
+            <input type="email" id="auth-email" placeholder="ejemplo@correo.com" required />
+          </div>
+          <div class="form-group">
+            <label for="auth-password">Contraseña</label>
+            <input type="password" id="auth-password" placeholder="Mínimo 6 caracteres" required />
+          </div>
+          <div id="auth-error-msg" class="error-msg hidden"></div>
+          <button type="submit" id="auth-submit-btn" class="btn-primary full-width">Entrar</button>
+        </form>
+        <div class="auth-toggle-link">
+          <span id="auth-toggle-text">¿No tienes cuenta?</span>
+          <button type="button" id="btn-toggle-auth-mode" class="link-btn">Crear cuenta</button>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel full-width" data-close-modal>Continuar en modo local</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
