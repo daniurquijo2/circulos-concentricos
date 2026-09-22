@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -86,51 +86,67 @@
 
       <!-- MENÚ LATERAL FLOTANTE -->
       <aside id="side-menu" class="side-menu">
-        <div id="side-view-main" class="side-view">
+        <button id="btn-panel-hide" class="btn-panel-hide" title="Ocultar panel">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+        <div class="side-menu-inner">
+        <div id="side-view-main" class="side-view active">
           <!-- AÑADIR PARTICIPANTE -->
-          <details class="add-participant-card" open>
-            <summary>Añadir participante <span class="summary-plus">+</span></summary>
+          <div class="add-participant-card">
+            <div class="view-head">
+              <h3 class="section-title">Añadir participante</h3>
+            </div>
             <form id="form-add-participant" class="add-form">
               <div class="form-group">
-                <label for="input-name">Nombre <span class="required">*</span></label>
-                <input type="text" id="input-name" placeholder="Nombre completo" required />
+                <input type="text" id="input-name" placeholder="Nombre" required />
               </div>
               <div class="form-row">
                 <div class="form-group flex-1">
-                  <label for="input-age">Edad</label>
-                  <input type="number" id="input-age" placeholder="Ej: 24" min="0" max="130" />
+                  <input type="number" id="input-age" placeholder="Edad" min="0" max="130" />
                 </div>
               </div>
               <div class="form-group">
-                <label for="input-comments">Comentarios</label>
-                <textarea id="input-comments" rows="2" placeholder="Observaciones, notas..."></textarea>
+                <div class="comments-row">
+                  <textarea id="input-comments" rows="2" placeholder="Observaciones, notas..."></textarea>
+                  <button type="submit" class="btn-add-submit" title="Añadir a los círculos">+</button>
+                </div>
               </div>
-              <button type="submit" class="btn-add-submit" title="Crear participante en el exterior">
-                Añadir a los círculos
-              </button>
             </form>
-          </details>
+            <button type="button" id="btn-go-list" class="btn-go-list">
+              Ver lista
+              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+            </button>
+          </div>
+        </div>
 
-          <!-- LISTA DE PARTICIPANTES -->
+        <!-- VISTA LISTA -->
+        <div id="side-view-list" class="side-view">
+          <div class="view-head">
+            <button type="button" id="btn-back-to-main" class="btn-back-inline">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>
+              Atrás
+            </button>
+          </div>
           <div class="list-card">
             <div class="list-header">
-              <h3 class="section-title">Participantes <span id="participant-count">0</span></h3>
-            </div>
-            <div class="list-controls">
-              <label class="toggle-control">
-                <input type="checkbox" id="toggle-group-circles" checked />
-                <span class="toggle-slider"></span>
-                <span class="toggle-label">Por círculo</span>
-              </label>
-
-              <div class="sort-control">
-                <label for="select-sort">Ordenar por:</label>
-                <select id="select-sort">
-                  <option value="custom">Orden personalizado (arrastrar)</option>
-                  <option value="alpha">Alfabético (A-Z)</option>
-                  <option value="createdAt">Fecha de añadido</option>
-                  <option value="updatedAt">Última modificación</option>
-                </select>
+              <h3 class="section-title">Lista <span id="participant-count">0</span></h3>
+              <div class="list-controls">
+                <label class="toggle-control">
+                  <input type="checkbox" id="toggle-group-circles" checked />
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-label">Agrupar</span>
+                </label>
+                <div class="sort-control">
+                  <label for="select-sort">Ordenar por:</label>
+                  <select id="select-sort">
+                    <option value="custom">Orden personalizado</option>
+                    <option value="alpha">Alfabético (A-Z)</option>
+                    <option value="createdAt">Fecha de añadido</option>
+                    <option value="updatedAt">Última modificación</option>
+                  </select>
+                </div>
               </div>
             </div>
             <div id="participants-list-container" class="participants-list-container"></div>
@@ -139,13 +155,11 @@
 
         <!-- VISTA DETALLE -->
         <div id="side-view-detail" class="side-view hidden">
-          <div class="detail-header">
-            <button id="btn-back-to-list" class="btn-icon-back" title="Volver a la lista">
-              <svg viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/>
-              </svg>
+          <div class="view-head">
+            <button id="btn-back-to-list" class="btn-back-inline" title="Volver">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>
+              Atrás
             </button>
-            <h3 class="section-title">Ficha del Participante</h3>
           </div>
 
           <form id="form-edit-participant" class="detail-form">
@@ -175,6 +189,7 @@
               <button type="button" id="btn-delete-participant" class="btn-delete">Eliminar</button>
             </div>
           </form>
+        </div>
         </div>
       </aside>
     </main>
@@ -236,5 +251,94 @@
   </div>
 
   <script type="module" src="app.js"></script>
+  <script>
+  (function () {
+    const menu = document.getElementById('side-menu');
+    const inner = menu.querySelector('.side-menu-inner');
+    const views = {
+      main: document.getElementById('side-view-main'),
+      list: document.getElementById('side-view-list'),
+      detail: document.getElementById('side-view-detail')
+    };
+    let current = 'main';
+    let returnTo = 'main';
+    let open = true;
+
+    let measuring = false;
+    function measure(el) {
+      measuring = true;
+      const prevMax = el.style.maxHeight, prevH = el.style.height;
+      el.style.maxHeight = 'none';
+      el.style.height = 'auto';
+      const h = el.scrollHeight;
+      el.style.maxHeight = prevMax;
+      el.style.height = prevH;
+      measuring = false;
+      return h;
+    }
+
+    let raf = null;
+    function applyHeight() {
+      if (!open || measuring) return;
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        const target = measure(views[current]);
+        const max = window.innerHeight - 60 - 52;
+        inner.style.height = Math.min(target, max) + 'px';
+      });
+    }
+
+    function setView(name) {
+      if (!views[name] || name === current) { applyHeight(); return; }
+      const from = views[current];
+      const to = views[name];
+      const forward = ['main', 'list', 'detail'].indexOf(name) > ['main', 'list', 'detail'].indexOf(current);
+      from.classList.remove('active');
+      from.classList.add(forward ? 'leave-back' : 'leave-fwd');
+      to.classList.remove('leave-back', 'leave-fwd');
+      to.classList.add('active', forward ? 'enter-fwd' : 'enter-back');
+      current = name;
+      applyHeight();
+      requestAnimationFrame(() => to.classList.remove('enter-fwd', 'enter-back'));
+      setTimeout(() => from.classList.remove('leave-back', 'leave-fwd'), 420);
+    }
+
+    document.getElementById('btn-go-list').addEventListener('click', () => { returnTo = 'main'; setView('list'); });
+    document.getElementById('btn-back-to-main').addEventListener('click', () => setView('main'));
+
+    // app.js drives the detail view by toggling .hidden — mirror it here
+    let syncing = false;
+    const sync = () => {
+      if (syncing) return;
+      syncing = true;
+      try { doSync(); } finally { requestAnimationFrame(() => { syncing = false; }); }
+    };
+    const doSync = () => {
+      const detailOpen = !views.detail.classList.contains('hidden');
+      if (detailOpen && current !== 'detail') { returnTo = current; setView('detail'); }
+      else if (!detailOpen && current === 'detail') setView(returnTo);
+      else applyHeight();
+    };
+    new MutationObserver(sync).observe(views.detail, { attributes: true, attributeFilter: ['class'] });
+    const listBox = document.getElementById('participants-list-container');
+    new MutationObserver(() => { if (!measuring) applyHeight(); })
+      .observe(listBox, { childList: true });
+
+    function setOpen(v) {
+      open = v;
+      menu.classList.toggle('collapsed', !open);
+      if (window.__setSidebarOpen) window.__setSidebarOpen(open);
+      if (open) applyHeight(); else inner.style.height = '';
+    }
+    document.getElementById('btn-panel-hide').addEventListener('click', () => setOpen(!open));
+    new MutationObserver(() => {
+      const collapsed = menu.classList.contains('collapsed');
+      if (collapsed === open) { open = !collapsed; if (open) applyHeight(); else inner.style.height = ''; }
+    }).observe(menu, { attributes: true, attributeFilter: ['class'] });
+    window.addEventListener('resize', applyHeight);
+    applyHeight();
+  })();
+  </script>
 </body>
 </html>

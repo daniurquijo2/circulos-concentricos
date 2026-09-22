@@ -1,22 +1,18 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-import {
-  getAuth,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut
-} from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  collection,
-  onSnapshot,
-  getDocs,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+// Los SDK de Firebase se cargan de forma diferida (dynamic import) para que
+// un CDN lento o bloqueado nunca retrase el primer pintado de la app.
+const CDN = "https://www.gstatic.com/firebasejs/10.9.0/";
+let fb = null;
+
+async function loadFirebaseSdk() {
+  if (fb) return fb;
+  const [appMod, authMod, fsMod] = await Promise.all([
+    import(CDN + "firebase-app.js"),
+    import(CDN + "firebase-auth.js"),
+    import(CDN + "firebase-firestore.js")
+  ]);
+  fb = { ...appMod, ...authMod, ...fsMod };
+  return fb;
+}
 
 export const firebaseConfig = {
   apiKey: "AIzaSyCeDjPgzfTUfhGSGSmOkYEqXetKkBpXlfs",
@@ -31,12 +27,13 @@ let app = null;
 export let auth = null;
 export let db = null;
 
-export function initFirebaseCloud(onAuthCallback) {
+export async function initFirebaseCloud(onAuthCallback) {
   if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "TU_API_KEY") {
     console.log("Modo local activo (localStorage).");
     return;
   }
   try {
+    const { initializeApp, getAuth, getFirestore, onAuthStateChanged } = await loadFirebaseSdk();
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
@@ -50,17 +47,17 @@ export function initFirebaseCloud(onAuthCallback) {
 
 export async function loginUser(email, password) {
   if (!auth) throw new Error("Firebase no está configurado aún.");
-  return await signInWithEmailAndPassword(auth, email, password);
+  return await fb.signInWithEmailAndPassword(auth, email, password);
 }
 
 export async function registerUser(email, password) {
   if (!auth) throw new Error("Firebase no está configurado aún.");
-  return await createUserWithEmailAndPassword(auth, email, password);
+  return await fb.createUserWithEmailAndPassword(auth, email, password);
 }
 
 export async function logoutUser() {
   if (!auth) return;
-  return await signOut(auth);
+  return await fb.signOut(auth);
 }
 
 /* --- Lectura en tiempo real ------------------------------------------- */
@@ -72,14 +69,14 @@ export function subscribeToNucleusData(nucleusId, callback) {
   let participants = [];
   const emit = () => callback(nucleusData, participants);
 
-  const unsubNucleus = onSnapshot(
-    doc(db, "nuclei", nucleusId),
+  const unsubNucleus = fb.onSnapshot(
+    fb.doc(db, "nuclei", nucleusId),
     (snap) => { nucleusData = snap.exists() ? snap.data() : null; emit(); },
     (err) => console.error("Error leyendo el núcleo:", err)
   );
 
-  const unsubParticipants = onSnapshot(
-    collection(db, "nuclei", nucleusId, "participants"),
+  const unsubParticipants = fb.onSnapshot(
+    fb.collection(db, "nuclei", nucleusId, "participants"),
     (qs) => { participants = qs.docs.map((d) => d.data()); emit(); },
     (err) => console.error("Error leyendo los participantes:", err)
   );
@@ -91,12 +88,12 @@ export function subscribeToNucleusData(nucleusId, callback) {
 
 export async function saveParticipantDoc(nucleusId, participant) {
   if (!db) return;
-  await setDoc(doc(db, "nuclei", nucleusId, "participants", participant.id), participant, { merge: true });
+  await fb.setDoc(fb.doc(db, "nuclei", nucleusId, "participants", participant.id), participant, { merge: true });
 }
 
 export async function deleteParticipantDoc(nucleusId, participantId) {
   if (!db) return;
-  await deleteDoc(doc(db, "nuclei", nucleusId, "participants", participantId));
+  await fb.deleteDoc(fb.doc(db, "nuclei", nucleusId, "participants", participantId));
 }
 
 export async function saveNucleusDoc(nucleus) {
@@ -107,10 +104,10 @@ export async function saveNucleusDoc(nucleus) {
   const { members, ...data } = nucleus;
   if (!data.ownerId) data.ownerId = uid;
 
-  await setDoc(doc(db, "nuclei", nucleus.id), data, { merge: true });
-  await setDoc(doc(db, "nuclei", nucleus.id, "members", uid),
-    { uid, joinedAt: serverTimestamp() }, { merge: true });
-  await setDoc(doc(db, "users", uid, "nuclei", nucleus.id),
+  await fb.setDoc(fb.doc(db, "nuclei", nucleus.id), data, { merge: true });
+  await fb.setDoc(fb.doc(db, "nuclei", nucleus.id, "members", uid),
+    { uid, joinedAt: fb.serverTimestamp() }, { merge: true });
+  await fb.setDoc(fb.doc(db, "users", uid, "nuclei", nucleus.id),
     { id: nucleus.id, name: data.name || "" }, { merge: true });
 }
 
@@ -118,11 +115,11 @@ export async function saveNucleusDoc(nucleus) {
 
 export async function getUserNucleiList(userId) {
   if (!db) return [];
-  const index = await getDocs(collection(db, "users", userId, "nuclei"));
+  const index = await fb.getDocs(fb.collection(db, "users", userId, "nuclei"));
   const list = [];
   for (const entry of index.docs) {
     try {
-      const snap = await getDoc(doc(db, "nuclei", entry.id));
+      const snap = await fb.getDoc(fb.doc(db, "nuclei", entry.id));
       if (snap.exists()) list.push(snap.data());
     } catch (err) {
       console.warn("Sin acceso al núcleo", entry.id, err);
@@ -133,11 +130,11 @@ export async function getUserNucleiList(userId) {
 
 export async function joinNucleusByInvite(nucleusId, userId) {
   if (!db) return;
-  await setDoc(doc(db, "nuclei", nucleusId, "members", userId),
-    { uid: userId, joinedAt: serverTimestamp() }, { merge: true });
+  await fb.setDoc(fb.doc(db, "nuclei", nucleusId, "members", userId),
+    { uid: userId, joinedAt: fb.serverTimestamp() }, { merge: true });
 
-  const snap = await getDoc(doc(db, "nuclei", nucleusId));
+  const snap = await fb.getDoc(fb.doc(db, "nuclei", nucleusId));
   const name = snap.exists() ? (snap.data().name || "Núcleo compartido") : "Núcleo compartido";
-  await setDoc(doc(db, "users", userId, "nuclei", nucleusId),
+  await fb.setDoc(fb.doc(db, "users", userId, "nuclei", nucleusId),
     { id: nucleusId, name }, { merge: true });
 }

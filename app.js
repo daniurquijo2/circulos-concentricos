@@ -1,4 +1,4 @@
-﻿import { 
+import { 
   initFirebaseCloud, 
   auth, 
   loginUser, 
@@ -95,6 +95,7 @@ const dom = {
 document.addEventListener('DOMContentLoaded', () => {
   loadLocalState();
   initEventListeners();
+  observeCanvasSize();
   renderCanvas();
   renderParticipantsList();
   updateNucleusUI();
@@ -198,6 +199,7 @@ function initEventListeners() {
 }
 
 function toggleSidebar() {
+  state.sidebarOpen = !dom.sideMenu.classList.contains('collapsed');
   state.sidebarOpen = !state.sidebarOpen;
   if (state.sidebarOpen) {
     dom.sideMenu.classList.remove('collapsed');
@@ -207,10 +209,32 @@ function toggleSidebar() {
   setTimeout(() => renderCanvas(), 300);
 }
 
+let canvasObserver = null;
+function observeCanvasSize() {
+  if (canvasObserver || !dom.canvasContainer) return;
+  let last = '';
+  canvasObserver = new ResizeObserver((entries) => {
+    const { width, height } = entries[0].contentRect;
+    const key = Math.round(width) + 'x' + Math.round(height);
+    if (width < 2 || height < 2 || key === last) return;
+    last = key;
+    renderCanvas();
+  });
+  canvasObserver.observe(dom.canvasContainer);
+}
+
 function renderCanvas() {
   const rect = dom.canvasContainer.getBoundingClientRect();
   const width = rect.width;
   const height = rect.height;
+
+  // El primer render puede ocurrir antes de que el layout resuelva la caja del
+  // contenedor: sin ancho/alto todos los radios saldrían 0. Reintentamos en el
+  // siguiente frame y dejamos que el ResizeObserver haga el render definitivo.
+  if (width < 2 || height < 2) {
+    requestAnimationFrame(renderCanvas);
+    return;
+  }
   
   dom.svgCanvas.setAttribute('viewBox', `0 0 ${width} ${height}`);
   
