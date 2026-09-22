@@ -96,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadLocalState();
   initEventListeners();
   observeCanvasSize();
+  initCanvasZoom();
   renderCanvas();
   renderParticipantsList();
   updateNucleusUI();
@@ -209,6 +210,53 @@ function toggleSidebar() {
   setTimeout(() => renderCanvas(), 300);
 }
 
+// ---- Zoom del lienzo (rueda del ratón) ----
+const view = { zoom: 1, x: 0, y: 0, w: 0, h: 0 };
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 6;
+
+function applyViewBox() {
+  if (view.w < 2 || view.h < 2) return;
+  const vw = view.w / view.zoom;
+  const vh = view.h / view.zoom;
+  // mantener la vista dentro del lienzo
+  view.x = Math.min(Math.max(view.x, 0), view.w - vw);
+  view.y = Math.min(Math.max(view.y, 0), view.h - vh);
+  dom.svgCanvas.setAttribute('viewBox', `${view.x} ${view.y} ${vw} ${vh}`);
+  dom.canvasContainer.dataset.zoomed = view.zoom > 1.01 ? 'true' : 'false';
+}
+
+function zoomAt(clientX, clientY, factor) {
+  const rect = dom.canvasContainer.getBoundingClientRect();
+  const prev = view.zoom;
+  const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, prev * factor));
+  if (next === prev) return;
+  // punto del lienzo bajo el cursor, invariante al hacer zoom
+  const fx = (clientX - rect.left) / rect.width;
+  const fy = (clientY - rect.top) / rect.height;
+  const cx = view.x + fx * (view.w / prev);
+  const cy = view.y + fy * (view.h / prev);
+  view.zoom = next;
+  view.x = cx - fx * (view.w / next);
+  view.y = cy - fy * (view.h / next);
+  applyViewBox();
+}
+
+function initCanvasZoom() {
+  dom.canvasContainer.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) return;
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016));
+  }, { passive: false });
+
+  // doble clic en el fondo: volver a la vista completa
+  dom.canvasContainer.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.participant-node')) return;
+    view.zoom = 1; view.x = 0; view.y = 0;
+    applyViewBox();
+  });
+}
+
 let canvasObserver = null;
 function observeCanvasSize() {
   if (canvasObserver || !dom.canvasContainer) return;
@@ -236,7 +284,11 @@ function renderCanvas() {
     return;
   }
   
-  dom.svgCanvas.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  if (view.w !== width || view.h !== height) {
+    view.w = width;
+    view.h = height;
+  }
+  applyViewBox();
   
   const centerX = width / 2;
   const centerY = height / 2;
@@ -283,8 +335,8 @@ function renderCanvas() {
     g.setAttribute('transform', `translate(${px}, ${py})`);
     g.dataset.id = p.id;
 
-    const textWidth = Math.max(80, p.name.length * 8 + 24);
-    const textHeight = 28;
+    const textWidth = Math.max(54, p.name.length * 5.7 + 18);
+    const textHeight = 20;
 
     const rectEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rectEl.setAttribute('x', -textWidth / 2);
@@ -348,8 +400,8 @@ function makeDraggable(element, participant, centerX, centerY, maxRadius) {
 
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) element.dataset.dragged = 'true';
 
-    const newNormX = currentNormX + dx / maxRadius;
-    const newNormY = currentNormY + dy / maxRadius;
+    const newNormX = currentNormX + dx / (maxRadius * view.zoom);
+    const newNormY = currentNormY + dy / (maxRadius * view.zoom);
 
     const px = centerX + newNormX * maxRadius;
     const py = centerY + newNormY * maxRadius;
@@ -369,8 +421,8 @@ function makeDraggable(element, participant, centerX, centerY, maxRadius) {
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
 
-    participant.normX = currentNormX + dx / maxRadius;
-    participant.normY = currentNormY + dy / maxRadius;
+    participant.normX = currentNormX + dx / (maxRadius * view.zoom);
+    participant.normY = currentNormY + dy / (maxRadius * view.zoom);
     participant.updatedAt = new Date().toISOString();
 
     const distance = Math.sqrt(participant.normX * participant.normX + participant.normY * participant.normY);
