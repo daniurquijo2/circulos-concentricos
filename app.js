@@ -82,6 +82,7 @@ const dom = {
   detailAge: document.getElementById('detail-age'),
   detailComments: document.getElementById('detail-comments'),
   detailNextSteps: document.getElementById('detail-next-steps'),
+  detailBooks: document.getElementById('detail-books'),
   detailCreatedAt: document.getElementById('detail-created-at'),
   detailUpdatedAt: document.getElementById('detail-updated-at'),
   btnArchiveParticipant: document.getElementById('btn-archive-participant'),
@@ -419,6 +420,66 @@ function initCanvasZoom() {
   });
 }
 
+// ---- Libros de estudio (L1 = base de la pirámide … L7 = cima) ----
+const BOOKS = [
+  { n: 1, color: '#CA0068', ink: '#FFFFFF' },
+  { n: 2, color: '#E23940', ink: '#FFFFFF' },
+  { n: 3, color: '#EF7623', ink: '#14110C' },
+  { n: 4, color: '#FCB131', ink: '#14110C' },
+  { n: 5, color: '#FFD203', ink: '#14110C' },
+  { n: 6, color: '#FFEA6D', ink: '#14110C' },
+  { n: 7, color: '#E9EA67', ink: '#14110C' }
+];
+
+function hasBook(p, n) {
+  return Array.isArray(p.books) && p.books.includes(n);
+}
+
+function booksStripHtml(p, cls) {
+  return `<div class="${cls}">` + BOOKS.map((b) => {
+    const done = hasBook(p, b.n);
+    const style = done ? ` style="--book:${b.color};--book-ink:${b.ink}"` : '';
+    return `<span class="book-chip${done ? ' done' : ''}"${style} title="Libro ${b.n}${done ? ' · hecho' : ' · pendiente'}">L${b.n}</span>`;
+  }).join('') + '</div>';
+}
+
+function renderDetailBooks(p) {
+  dom.detailBooks.innerHTML = '';
+  BOOKS.forEach((b) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'book-toggle';
+    btn.textContent = `L${b.n}`;
+    btn.style.setProperty('--book', b.color);
+    btn.style.setProperty('--book-ink', b.ink);
+    const done = hasBook(p, b.n);
+    btn.classList.toggle('done', done);
+    btn.setAttribute('aria-pressed', done ? 'true' : 'false');
+    btn.title = `Libro ${b.n}: ${done ? 'completado' : 'pendiente'}`;
+    btn.addEventListener('click', () => toggleBook(p.id, b.n));
+    dom.detailBooks.appendChild(btn);
+  });
+}
+
+// Marcar/desmarcar un libro se guarda al momento
+function toggleBook(id, n) {
+  const p = state.participants.find((item) => item.id === id);
+  if (!p) return;
+  const set = new Set(Array.isArray(p.books) ? p.books : []);
+  if (set.has(n)) set.delete(n); else set.add(n);
+  p.books = [...set].sort((a, b) => a - b);
+  p.updatedAt = new Date().toISOString();
+  saveParticipant(p);
+  // actualizar solo el estado de los botones (sin perder el foco)
+  dom.detailBooks.querySelectorAll('.book-toggle').forEach((btn, i) => {
+    const done = hasBook(p, BOOKS[i].n);
+    btn.classList.toggle('done', done);
+    btn.setAttribute('aria-pressed', done ? 'true' : 'false');
+    btn.title = `Libro ${BOOKS[i].n}: ${done ? 'completado' : 'pendiente'}`;
+  });
+  if (popState.id === id) openPersonPop(id);
+}
+
 // ---- Ficha rápida de un participante ----
 const popState = { id: null };
 
@@ -446,6 +507,7 @@ function openPersonPop(id) {
       <span class="pop-name">${escapeHtml(p.name)}</span>${age}
     </div>
     ${obs}
+    ${booksStripHtml(p, 'pop-books')}
     <div class="pop-label">Próximos pasos</div>
     ${steps}
     <div class="pop-foot">Abrir perfil →</div>`;
@@ -948,6 +1010,7 @@ function openParticipantDetail(id) {
   dom.detailAge.value = p.age || '';
   dom.detailComments.value = p.comments || '';
   dom.detailNextSteps.value = p.nextSteps || '';
+  renderDetailBooks(p);
 
   const circle = state.activeNucleus.circles[p.circleIndex];
   dom.detailCircleName.textContent = circle ? circle.name : 'Exterior / Sin asignar';
