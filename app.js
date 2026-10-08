@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610082005';
+} from './firebase-config.js?v=202610082010';
 
 export const state = {
   user: null,
@@ -428,7 +428,6 @@ function initCanvasZoom() {
   dom.personPop.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dom.personPop.click(); }
   });
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePersonPop(); });
   // clic fuera del lienzo (menú, cabecera...) también la cierra
   document.addEventListener('pointerdown', (e) => {
     if (popState.id && !dom.canvasContainer.contains(e.target)) closePersonPop();
@@ -486,7 +485,7 @@ function notifySideMenuResize() {
  *  - «Haciendo ahora»: libros elegidos + botón «+» que despliega los 7 libros
  * getModel() devuelve el objeto con { books, doing }; onChange() se llama tras cada cambio.
  */
-function createBooksEditor(root, getModel, onChange) {
+function createBooksEditor(root, getModel, onChange, onBefore = () => {}) {
   root.innerHTML = `
     <div class="form-group">
       <label>Libros completados</label>
@@ -513,6 +512,7 @@ function createBooksEditor(root, getModel, onChange) {
     btn.addEventListener('click', () => {
       const m = getModel();
       if (!m) return;
+      onBefore(m);
       const set = new Set(Array.isArray(m.books) ? m.books : []);
       if (set.has(b.n)) {
         set.delete(b.n);
@@ -536,6 +536,7 @@ function createBooksEditor(root, getModel, onChange) {
     pick.addEventListener('click', () => {
       const m = getModel();
       if (!m) return;
+      onBefore(m);
       const set = new Set(Array.isArray(m.doing) ? m.doing : []);
       set.add(b.n);
       m.doing = [...set].sort((x, y) => x - y);
@@ -588,6 +589,7 @@ function createBooksEditor(root, getModel, onChange) {
       chip.addEventListener('click', () => {
         const mm = getModel();
         if (!mm) return;
+        onBefore(mm);
         mm.doing = (mm.doing || []).filter((x) => x !== n);
         update();
         onChange(mm);
@@ -614,6 +616,7 @@ function createBooksEditor(root, getModel, onChange) {
 }
 
 let detailBooksEditor = null;
+let booksBefore = null;
 let addBooksEditor = null;
 let addDraft = { books: [], doing: [] };
 
@@ -625,8 +628,10 @@ function initBooksEditors() {
       // se guarda al momento
       p.updatedAt = new Date().toISOString();
       saveParticipant(p);
+      recordChange(`libros de «${p.name}»`, booksBefore, p);
       if (popState.id === p.id) openPersonPop(p.id);
-    }
+    },
+    (p) => { booksBefore = cloneP(p); }
   );
   addBooksEditor = createBooksEditor(dom.addBooksEditor, () => addDraft, () => {});
 }
@@ -930,7 +935,7 @@ function makeDraggable(element, participant, centerX, centerY, maxRadius) {
     if (element.dataset.dragged === 'true') placeAtCursor();
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e) => {
     if (!isDragging) return;
     isDragging = false;
     element.classList.remove('dragging');
@@ -941,11 +946,18 @@ function makeDraggable(element, participant, centerX, centerY, maxRadius) {
     // sin movimiento: es un clic → mostrar/ocultar la ficha rápida
     if (element.dataset.dragged !== 'true') {
       dom.circlesLayer.querySelectorAll('.hover-active').forEach((el) => el.classList.remove('hover-active'));
+      // Ctrl+clic: abrir directamente su perfil
+      if (e && (e.ctrlKey || e.metaKey)) {
+        closePersonPop();
+        openParticipantDetail(participant.id);
+        return;
+      }
       if (popState.id === participant.id) closePersonPop();
       else openPersonPop(participant.id);
       return;
     }
 
+    const beforeMove = cloneP(participant);
     participant.normX = newNormX;
     participant.normY = newNormY;
     participant.updatedAt = new Date().toISOString();
@@ -954,6 +966,7 @@ function makeDraggable(element, participant, centerX, centerY, maxRadius) {
     participant.circleIndex = calculateCircleFromDistance(distance);
 
     saveParticipant(participant);
+    recordChange(`mover a «${participant.name}»`, beforeMove, participant);
     renderCanvas();
     renderParticipantsList();
   };
@@ -1012,6 +1025,7 @@ function handleAddParticipant(e) {
 
   state.participants.push(newParticipant);
   saveParticipant(newParticipant);
+  recordChange(`crear a «${name}»`, null, newParticipant);
 
   dom.inputName.value = '';
   dom.inputAge.value = '';
@@ -1161,11 +1175,26 @@ function initDragAndDropListReordering() {
   });
 }
 
+// Vuelve a pintar los campos del perfil abierto (p. ej. tras deshacer)
+function refreshDetailFields(p) {
+  clearTimeout(detailSaveTimer);
+  detailSaveTimer = null;
+  dom.detailName.value = p.name;
+  dom.detailAge.value = p.age || '';
+  dom.detailComments.value = p.comments || '';
+  dom.detailNextSteps.value = p.nextSteps || '';
+  if (detailBooksEditor) detailBooksEditor.update();
+  const circle = state.activeNucleus.circles[p.circleIndex];
+  dom.detailCircleName.textContent = circle ? circle.name : 'Exterior / Sin asignar';
+  dom.detailUpdatedAt.textContent = p.updatedAt ? new Date(p.updatedAt).toLocaleString() : '-';
+  dom.btnArchiveParticipant.textContent = p.archived ? 'Desarchivar' : 'Archivar';
+}
+
 function openParticipantDetail(id) {
   const p = state.participants.find(item => item.id === id);
   if (!p) return;
 
-  if (isDetailOpen() && dom.detailId.value && dom.detailId.value !== id) flushDetailAutosave();
+  if (isDetailOpen() && dom.detailId.value) flushDetailAutosave();
   clearTimeout(detailSaveTimer);
   detailSaveTimer = null;
   setSaveStatus('Los cambios se guardan automáticamente');
@@ -1218,6 +1247,58 @@ function showSideView(view) {
   }
 }
 
+// ---- Deshacer / rehacer (Ctrl+Z / Ctrl+Mayús+Z) ----
+// Cada entrada guarda cómo era una persona antes y después del cambio
+// (null = no existía). Sirve para crear, borrar, mover y editar.
+const history = { undo: [], redo: [] };
+const HISTORY_MAX = 100;
+
+function cloneP(p) {
+  return p ? JSON.parse(JSON.stringify(p)) : null;
+}
+
+function recordChange(label, before, after) {
+  if (JSON.stringify(before) === JSON.stringify(after)) return;
+  history.undo.push({ label, nucleusId: state.activeNucleusId, before: cloneP(before), after: cloneP(after) });
+  if (history.undo.length > HISTORY_MAX) history.undo.shift();
+  history.redo = [];
+}
+
+function applySnapshot(id, snap) {
+  const idx = state.participants.findIndex((p) => p.id === id);
+  if (!snap) {
+    if (idx >= 0) state.participants.splice(idx, 1);
+    saveLocalState();
+    if (state.user) deleteParticipantDoc(state.activeNucleusId, id);
+    if (popState.id === id) closePersonPop();
+    if (isDetailOpen() && dom.detailId.value === id) showSideView('main');
+  } else {
+    const copy = cloneP(snap);
+    if (idx >= 0) state.participants[idx] = copy; else state.participants.push(copy);
+    saveParticipant(copy);
+    if (isDetailOpen() && dom.detailId.value === id) refreshDetailFields(copy);
+    if (popState.id === id) openPersonPop(id);
+  }
+  renderCanvas();
+  renderParticipantsList();
+}
+
+function undoRedo(redo) {
+  const from = redo ? history.redo : history.undo;
+  const to = redo ? history.undo : history.redo;
+  // solo cambios del núcleo que estás viendo
+  let i = from.length - 1;
+  while (i >= 0 && from[i].nucleusId !== state.activeNucleusId) i--;
+  if (i < 0) { showToast(redo ? 'Nada que rehacer' : 'Nada que deshacer'); return; }
+  const [entry] = from.splice(i, 1);
+  if (isDetailOpen()) flushDetailAutosave();
+  const snap = redo ? entry.after : entry.before;
+  const id = (entry.after || entry.before).id;
+  applySnapshot(id, snap);
+  to.push(entry);
+  showToast(`${redo ? 'Rehecho' : 'Deshecho'}: ${entry.label}`);
+}
+
 // ---- Atajos de teclado ----
 function isTypingTarget(el) {
   if (!el) return false;
@@ -1260,22 +1341,45 @@ function closeEverything() {
 }
 
 function initKeyboardShortcuts() {
+  // Esc: cerrar todo lo abierto (guardando). Va primero para ganar a otros Esc.
   window.addEventListener('keydown', (e) => {
-    if (e.isComposing || e.repeat) return;
-    const key = e.key.toLowerCase();
+    if (e.key !== 'Escape' || e.isComposing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeEverything();
+  }, true);
 
-    // Ctrl+Z: cerrar todos los menús abiertos
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && key === 'z') {
+  window.addEventListener('keydown', (e) => {
+    if (e.isComposing) return;
+    const key = e.key.toLowerCase();
+    const typing = isTypingTarget(document.activeElement);
+
+    // Ctrl+Z / Ctrl+Mayús+Z (o Ctrl+Y): deshacer / rehacer.
+    // Dentro de un campo de texto, el deshacer normal del texto.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y')) {
+      // con el formulario de alta vacío no hay texto que deshacer:
+      // Ctrl+Z deshace lo último de la app (p. ej. la persona recién creada)
+      const addFormEmpty = dom.formAddParticipant.contains(document.activeElement)
+        && ![dom.inputName, dom.inputAge, dom.inputComments, dom.inputNextSteps].some((el) => el.value);
+      if (typing && !addFormEmpty) return;
       e.preventDefault();
-      closeEverything();
+      undoRedo(key === 'y' || e.shiftKey);
       return;
     }
 
-    // N (fuera de los campos de texto): nuevo participante
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && key === 'n') {
-      if (isTypingTarget(document.activeElement) || anyModalOpen()) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if (typing || anyModalOpen()) return;
+
+    if (key === 'n') {            // N: nuevo participante
       e.preventDefault();
       openAddParticipantMenu();
+    } else if (key === 'q') {     // Q: ver todos
+      e.preventDefault();
+      toggleListView();
+    } else if (key === 'p') {     // P: personalizar
+      e.preventDefault();
+      closePersonPop();
+      openCircleCustomizerModal();
     }
   });
 }
@@ -1354,6 +1458,7 @@ function flushDetailAutosave() {
     return;
   }
 
+  const beforeEdit = cloneP(p);
   if (name) p.name = name;
   p.age = age;
   p.comments = comments;
@@ -1361,6 +1466,7 @@ function flushDetailAutosave() {
   p.updatedAt = new Date().toISOString();
 
   saveParticipant(p);
+  recordChange(`editar a «${p.name}»`, beforeEdit, p);
   renderCanvas();
   renderParticipantsList();
   if (popState.id === p.id) openPersonPop(p.id);
@@ -1389,7 +1495,9 @@ function handleToggleArchive() {
   const p = state.participants.find(item => item.id === id);
   if (!p) return;
 
+  const beforeArchive = cloneP(p);
   p.archived = !p.archived;
+  recordChange(`${p.archived ? 'archivar' : 'desarchivar'} a «${p.name}»`, beforeArchive, p);
   p.updatedAt = new Date().toISOString();
 
   saveParticipant(p);
@@ -1407,12 +1515,14 @@ function handleDeleteParticipant() {
   if (!p) return;
 
   if (confirm(`¿Estás seguro de que deseas eliminar a "${p.name}"?`)) {
+    recordChange(`eliminar a «${p.name}»`, p, null);
+    if (popState.id === id) closePersonPop();
     state.participants = state.participants.filter(item => item.id !== id);
     saveLocalState();
     if (state.user) deleteParticipantDoc(state.activeNucleusId, id);
     renderCanvas();
     renderParticipantsList();
-    showToast('Participante eliminado');
+    showToast('Participante eliminado · Ctrl+Z para deshacer');
     showSideView('main');
   }
 }
@@ -1795,14 +1905,7 @@ function initModals() {
       downOnOverlay = false;
     });
   });
-  window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    const open = [...document.querySelectorAll('.modal-overlay')].filter((m) => !m.classList.contains('hidden'));
-    if (!open.length) return;
-    e.preventDefault();
-    e.stopPropagation();
-    closeModal(open[open.length - 1], { cancel: true });
-  }, true);
+
 }
 
 function updateAuthUI() {
