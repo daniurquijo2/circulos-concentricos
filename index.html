@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="logo.svg" />
   <link rel="icon" type="image/png" sizes="512x512" href="logo-512.png" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=202610081442" />
+  <link rel="stylesheet" href="style.css?v=202610081857" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -81,10 +81,11 @@
           <button id="btn-auth-action" class="btn-auth">Iniciar sesión</button>
         </div>
 
-        <button id="btn-toggle-menu" class="btn-toggle-menu" title="Mostrar/Ocultar Menú Lateral">
-          <svg id="menu-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        <button id="btn-show-list" class="icon-text-btn" title="Ver la lista de participantes">
+          <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon">
+            <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm1 4a1 1 0 100 2h12a1 1 0 100-2H4z" clip-rule="evenodd"/>
           </svg>
+          Ver lista
         </button>
       </div>
     </header>
@@ -152,25 +153,15 @@
               <div class="form-group">
                 <div class="comments-row">
                   <textarea id="input-next-steps" rows="2" placeholder="Próximos pasos con esta persona..."></textarea>
-                  <button type="submit" class="btn-add-submit" title="Añadir a los círculos">+</button>
                 </div>
+                <span class="field-hint">Intro o clic fuera para añadir · Mayús+Intro: nueva línea</span>
               </div>
             </form>
-            <button type="button" id="btn-go-list" class="btn-go-list">
-              Ver lista
-              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
-            </button>
           </div>
         </div>
 
         <!-- VISTA LISTA -->
         <div id="side-view-list" class="side-view">
-          <div class="view-head">
-            <button type="button" id="btn-back-to-main" class="btn-back-inline">
-              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>
-              Atrás
-            </button>
-          </div>
           <div class="list-card">
             <div class="list-header">
               <h3 class="section-title">Lista <span id="participant-count">0</span></h3>
@@ -330,7 +321,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="app.js?v=202610081442"></script>
+  <script type="module" src="app.js?v=202610081857"></script>
   <script>
   (function () {
     const menu = document.getElementById('side-menu');
@@ -384,8 +375,6 @@
       setTimeout(() => from.classList.remove('leave-back', 'leave-fwd'), 420);
     }
 
-    document.getElementById('btn-go-list').addEventListener('click', () => { returnTo = 'main'; setView('list'); });
-    document.getElementById('btn-back-to-main').addEventListener('click', () => setView('main'));
 
     // app.js drives the detail view by toggling .hidden — mirror it here
     let syncing = false;
@@ -411,7 +400,19 @@
       if (window.__setSidebarOpen) window.__setSidebarOpen(open);
       if (open) applyHeight(); else inner.style.height = '';
     }
-    document.getElementById('btn-panel-hide').addEventListener('click', () => setOpen(!open));
+    // la flecha solo se ve con el menú cerrado: abre «Añadir participante»
+    document.getElementById('btn-panel-hide').addEventListener('click', () => {
+      if (open) { setOpen(false); return; }
+      returnTo = 'main';
+      setView('main');
+      setOpen(true);
+    });
+    window.__sideMenu = {
+      setView: (name) => { if (name !== 'detail') returnTo = name; setView(name); },
+      setOpen,
+      current: () => current,
+      isOpen: () => open
+    };
     new MutationObserver(() => {
       const collapsed = menu.classList.contains('collapsed');
       if (collapsed === open) { open = !collapsed; if (open) applyHeight(); else inner.style.height = ''; }

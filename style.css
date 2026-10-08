@@ -534,6 +534,8 @@ a:hover { color: #F5CE9E; }
 .btn-panel-hide:hover { color: var(--text-main); border-color: #2E3742; background: #1A2029; }
 .btn-panel-hide svg { width: 15px; height: 15px; transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
 .side-menu.collapsed .btn-panel-hide { left: -46px; }
+.side-menu:not(.collapsed) .btn-panel-hide { opacity: 0; pointer-events: none; }
+.btn-panel-hide { transition: opacity 0.2s ease, left 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
 .side-menu.collapsed .btn-panel-hide svg { transform: rotate(180deg); }
 
 .side-menu-inner {
@@ -1126,3 +1128,5 @@ textarea { resize: vertical; line-height: 1.55; }
 }
 
 .hidden { display: none !important; }
+
+#side-view-list .list-header { padding-top: 18px; }

@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610081442';
+} from './firebase-config.js?v=202610081857';
 
 export const state = {
   user: null,
@@ -48,7 +48,7 @@ const dom = {
   btnCustomizeCircles: document.getElementById('btn-customize-circles'),
   btnAuthAction: document.getElementById('btn-auth-action'),
   userEmailDisplay: document.getElementById('user-email-display'),
-  btnToggleMenu: document.getElementById('btn-toggle-menu'),
+  btnShowList: document.getElementById('btn-show-list'),
   sideMenu: document.getElementById('side-menu'),
   canvasContainer: document.getElementById('canvas-container'),
   svgCanvas: document.getElementById('circles-canvas'),
@@ -233,7 +233,15 @@ function initEventListeners() {
   dom.modalCustomizeCircles.querySelectorAll('[data-close-modal]').forEach((btn) => {
     btn.addEventListener('click', () => { fontPreviewLevel = null; renderCanvas(); });
   });
-  dom.btnToggleMenu.addEventListener('click', toggleSidebar);
+  dom.btnShowList.addEventListener('click', toggleListView);
+  // Formulario de alta: Intro añade (Mayús+Intro = salto de línea en el texto largo)
+  dom.formAddParticipant.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    if (e.target.tagName === 'TEXTAREA' && e.shiftKey) return;
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    dom.formAddParticipant.requestSubmit();
+  });
   dom.formAddParticipant.addEventListener('submit', handleAddParticipant);
 
   dom.toggleGroupCircles.addEventListener('change', (e) => {
@@ -252,15 +260,13 @@ function initEventListeners() {
     el.addEventListener('input', scheduleDetailAutosave);
     el.addEventListener('blur', () => { if (detailSaveTimer) flushDetailAutosave(); });
   });
-  // Clic fuera del menú con un perfil abierto: guardar y cerrar el menú
+  // Clic fuera del menú: guardar lo que haya (perfil o alta nueva) y cerrarlo
   document.addEventListener('pointerdown', (e) => {
-    if (!isDetailOpen() || dom.sideMenu.classList.contains('collapsed')) return;
+    if (dom.sideMenu.classList.contains('collapsed')) return;
     const t = e.target;
     if (dom.sideMenu.contains(t)) return;
-    if (t.closest('.modal-overlay') || t.closest('#person-pop') || t.closest('#btn-toggle-menu')) return;
-    flushDetailAutosave();
-    showSideView('main');
-    toggleSidebar();
+    if (t.closest('.modal-overlay') || t.closest('#person-pop') || t.closest('#btn-show-list') || t.closest('#toast')) return;
+    closeSideMenuSaving();
   }, true);
   // Intro guarda; Mayús+Intro hace salto de línea en los textos largos
   dom.formEditParticipant.addEventListener('keydown', (e) => {
@@ -976,7 +982,7 @@ function highlightCircleRing(dist) {
 }
 
 function handleAddParticipant(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   const name = dom.inputName.value.trim();
   if (!name) return;
 
@@ -1018,6 +1024,8 @@ function handleAddParticipant(e) {
   renderCanvas();
   renderParticipantsList();
   showToast(`"${name}" añadido en el exterior. ¡Arrastra su ficha al círculo!`);
+  // si se añadió con Intro, dejar listo el formulario para el siguiente
+  if (e && !dom.sideMenu.classList.contains('collapsed')) dom.inputName.focus();
 }
 
 function saveParticipant(p) {
@@ -1211,6 +1219,44 @@ function showSideView(view) {
   }
 }
 
+// ---- Abrir/cerrar el menú lateral ----
+function sideMenuCurrentView() {
+  if (isDetailOpen()) return 'detail';
+  return window.__sideMenu ? window.__sideMenu.current() : 'main';
+}
+
+// Cierra el menú guardando: perfil abierto → se guarda; alta con nombre → se crea
+function closeSideMenuSaving() {
+  const view = sideMenuCurrentView();
+  if (view === 'detail') {
+    flushDetailAutosave();
+    showSideView('main');
+  } else if (view === 'main' && dom.inputName.value.trim()) {
+    handleAddParticipant(null);
+  }
+  if (document.activeElement && dom.sideMenu.contains(document.activeElement)) document.activeElement.blur();
+  if (!dom.sideMenu.classList.contains('collapsed')) toggleSidebar();
+}
+
+// Botón «Ver lista» de la cabecera
+function toggleListView() {
+  const sm = window.__sideMenu;
+  if (!sm) return;
+  const open = !dom.sideMenu.classList.contains('collapsed');
+  if (open && sideMenuCurrentView() === 'list') {
+    closeSideMenuSaving();
+    return;
+  }
+  if (isDetailOpen()) {
+    flushDetailAutosave();
+    showSideView('main');
+  } else if (sideMenuCurrentView() === 'main' && dom.inputName.value.trim()) {
+    handleAddParticipant(null);   // no perder a quien se estaba añadiendo
+  }
+  sm.setView('list');
+  if (!open) sm.setOpen(true);
+}
+
 // ---- Guardado automático del perfil ----
 let detailSaveTimer = null;
 let detailStatusTimer = null;
@@ -1273,10 +1319,7 @@ function isDetailOpen() {
 // Intro (en el perfil): guardar y cerrar el menú
 function handleSaveParticipantDetail(e) {
   e.preventDefault();
-  flushDetailAutosave();
-  if (document.activeElement) document.activeElement.blur();
-  showSideView('main');
-  if (!dom.sideMenu.classList.contains('collapsed')) toggleSidebar();
+  closeSideMenuSaving();
 }
 
 function handleToggleArchive() {
