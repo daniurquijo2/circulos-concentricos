@@ -956,6 +956,22 @@ function openParticipantDetail(id) {
   dom.btnArchiveParticipant.textContent = p.archived ? 'Desarchivar' : 'Archivar';
 
   showSideView('detail');
+  focusNextStepsField();
+}
+
+// Deja el cursor listo en «Próximos pasos», al final del texto
+let focusNextStepsTimer = null;
+function focusNextStepsField() {
+  clearTimeout(focusNextStepsTimer);
+  // esperar a que termine la animación del panel / cambio de vista
+  focusNextStepsTimer = setTimeout(() => {
+    const ta = dom.detailNextSteps;
+    if (!ta || dom.sideViewDetail.classList.contains('hidden')) return;
+    ta.focus({ preventScroll: true });
+    const end = ta.value.length;
+    ta.setSelectionRange(end, end);
+    ta.scrollTop = ta.scrollHeight;
+  }, 450);
 }
 
 function showSideView(view) {
