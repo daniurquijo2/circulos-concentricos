@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610082010';
+} from './firebase-config.js?v=202610082014';
 
 export const state = {
   user: null,
@@ -233,6 +233,7 @@ function initEventListeners() {
   initModals();
   dom.btnShowList.addEventListener('click', toggleListView);
   initKeyboardShortcuts();
+  initContextMenu();
   // Formulario de alta: Intro añade (Mayús+Intro = salto de línea en el texto largo)
   dom.formAddParticipant.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.isComposing) return;
@@ -264,7 +265,7 @@ function initEventListeners() {
     if (dom.sideMenu.classList.contains('collapsed')) return;
     const t = e.target;
     if (dom.sideMenu.contains(t)) return;
-    if (t.closest('.modal-overlay') || t.closest('#person-pop') || t.closest('#btn-show-list') || t.closest('#toast')) return;
+    if (t.closest('.modal-overlay') || t.closest('#person-pop') || t.closest('#btn-show-list') || t.closest('#toast') || t.closest('.ctx-menu')) return;
     closeSideMenuSaving();
   }, true);
   // Intro guarda; Mayús+Intro hace salto de línea en los textos largos
@@ -1332,6 +1333,7 @@ function openAddParticipantMenu() {
 
 // Cierra todo lo que esté abierto (guardando lo que haya en el menú lateral)
 function closeEverything() {
+  closeContextMenu();
   document.querySelectorAll('.modal-overlay:not(.hidden)').forEach((m) => closeModal(m));
   dom.nucleusDropdown.classList.add('hidden');
   if (!dom.searchBox.classList.contains('hidden')) closeSearch();
@@ -1376,6 +1378,11 @@ function initKeyboardShortcuts() {
     } else if (key === 'q') {     // Q: ver todos
       e.preventDefault();
       toggleListView();
+    } else if (key === 'a' && popState.id) {   // A: abrir el perfil de la ficha flotante
+      e.preventDefault();
+      const id = popState.id;
+      closePersonPop();
+      openParticipantDetail(id);
     } else if (key === 'p') {     // P: personalizar
       e.preventDefault();
       closePersonPop();
@@ -1491,30 +1498,41 @@ function handleSaveParticipantDetail(e) {
 
 function handleToggleArchive() {
   flushDetailAutosave();
-  const id = dom.detailId.value;
+  toggleArchiveParticipant(dom.detailId.value);
+}
+
+function toggleArchiveParticipant(id) {
   const p = state.participants.find(item => item.id === id);
   if (!p) return;
 
   const beforeArchive = cloneP(p);
   p.archived = !p.archived;
-  recordChange(`${p.archived ? 'archivar' : 'desarchivar'} a «${p.name}»`, beforeArchive, p);
   p.updatedAt = new Date().toISOString();
+  recordChange(`${p.archived ? 'archivar' : 'desarchivar'} a «${p.name}»`, beforeArchive, p);
 
   saveParticipant(p);
+  if (p.archived && popState.id === id) closePersonPop();
   renderCanvas();
   renderParticipantsList();
-  showToast(p.archived ? 'Participante archivado' : 'Participante desarchivado');
-  showSideView('main');
+  showToast(p.archived ? 'Participante archivado · Ctrl+Z para deshacer' : 'Participante desarchivado');
+  if (isDetailOpen() && dom.detailId.value === id) showSideView('main');
 }
 
 function handleDeleteParticipant() {
   clearTimeout(detailSaveTimer);
   detailSaveTimer = null;
-  const id = dom.detailId.value;
+  deleteParticipantById(dom.detailId.value);
+}
+
+function deleteParticipantById(id) {
   const p = state.participants.find(item => item.id === id);
   if (!p) return;
 
   if (confirm(`¿Estás seguro de que deseas eliminar a "${p.name}"?`)) {
+    if (isDetailOpen() && dom.detailId.value === id) {
+      clearTimeout(detailSaveTimer);
+      detailSaveTimer = null;
+    }
     recordChange(`eliminar a «${p.name}»`, p, null);
     if (popState.id === id) closePersonPop();
     state.participants = state.participants.filter(item => item.id !== id);
@@ -1523,8 +1541,71 @@ function handleDeleteParticipant() {
     renderCanvas();
     renderParticipantsList();
     showToast('Participante eliminado · Ctrl+Z para deshacer');
-    showSideView('main');
+    if (isDetailOpen() && dom.detailId.value === id) showSideView('main');
   }
+}
+
+// ---- Menú contextual (clic derecho en un nombre) ----
+let ctxMenuEl = null;
+
+function closeContextMenu() {
+  if (ctxMenuEl) ctxMenuEl.classList.add('hidden');
+}
+
+function openContextMenu(id, x, y) {
+  const p = state.participants.find((item) => item.id === id);
+  if (!p) return;
+  if (!ctxMenuEl) {
+    ctxMenuEl = document.createElement('div');
+    ctxMenuEl.className = 'ctx-menu hidden';
+    ctxMenuEl.setAttribute('role', 'menu');
+    document.body.appendChild(ctxMenuEl);
+    ctxMenuEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const pid = ctxMenuEl.dataset.id;
+      closeContextMenu();
+      if (btn.dataset.action === 'archive') toggleArchiveParticipant(pid);
+      else if (btn.dataset.action === 'delete') deleteParticipantById(pid);
+      else if (btn.dataset.action === 'edit') { closePersonPop(); openParticipantDetail(pid); }
+    });
+    ctxMenuEl.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('pointerdown', (e) => {
+      if (ctxMenuEl && !ctxMenuEl.contains(e.target)) closeContextMenu();
+    }, true);
+    window.addEventListener('wheel', closeContextMenu, { passive: true });
+    window.addEventListener('resize', closeContextMenu);
+    window.addEventListener('blur', closeContextMenu);
+  }
+  ctxMenuEl.dataset.id = id;
+  ctxMenuEl.innerHTML = `
+    <div class="ctx-title">${escapeHtml(p.name)}</div>
+    <button type="button" role="menuitem" data-action="archive">${p.archived ? 'Desarchivar' : 'Archivar'}</button>
+    <button type="button" role="menuitem" data-action="delete" class="danger">Eliminar</button>
+    <button type="button" role="menuitem" data-action="edit">Editar</button>`;
+  ctxMenuEl.classList.remove('hidden');
+  const w = ctxMenuEl.offsetWidth;
+  const h = ctxMenuEl.offsetHeight;
+  ctxMenuEl.style.left = Math.min(x, window.innerWidth - w - 8) + 'px';
+  ctxMenuEl.style.top = Math.min(y, window.innerHeight - h - 8) + 'px';
+}
+
+function initContextMenu() {
+  // Doble clic en un nombre del lienzo: abrir su perfil
+  dom.participantsLayer.addEventListener('dblclick', (e) => {
+    const node = e.target.closest('.participant-node');
+    if (!node || !node.dataset.id) return;
+    e.preventDefault();
+    closePersonPop();
+    openParticipantDetail(node.dataset.id);
+  });
+
+  document.addEventListener('contextmenu', (e) => {
+    const node = e.target.closest('.participant-node, .participant-list-item');
+    if (!node || !node.dataset.id) return;
+    e.preventDefault();
+    openContextMenu(node.dataset.id, e.clientX, e.clientY);
+  });
 }
 
 function updateNucleusUI() {
