@@ -1130,3 +1130,5 @@ textarea { resize: vertical; line-height: 1.55; }
 .hidden { display: none !important; }
 
 #side-view-list .list-header { padding-top: 18px; }
+
+.modal-hint { display: block; margin-top: 16px; text-align: center; }

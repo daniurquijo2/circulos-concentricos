@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610082001';
+} from './firebase-config.js?v=202610082005';
 
 export const state = {
   user: null,
@@ -94,7 +94,6 @@ const dom = {
   inputNewNucleusName: document.getElementById('input-new-nucleus-name'),
   modalCustomizeCircles: document.getElementById('modal-customize-circles'),
   circleCustomizersContainer: document.getElementById('circle-customizers-container'),
-  btnSaveCircleSettings: document.getElementById('btn-save-circle-settings'),
   fontSizeSlider: document.getElementById('font-size-slider'),
   fontSizeValue: document.getElementById('font-size-value'),
   modalAuth: document.getElementById('modal-auth'),
@@ -204,35 +203,34 @@ function initEventListeners() {
   dom.btnRenameNucleus.addEventListener('click', () => openRenameNucleus(state.activeNucleusId));
   dom.formRenameNucleus.addEventListener('submit', (e) => {
     e.preventDefault();
-    const name = dom.inputRenameNucleus.value.trim();
-    if (!name) return;
-    renameNucleus(dom.formRenameNucleus.dataset.nucleusId, name);
-    dom.modalRenameNucleus.classList.add('hidden');
+    closeModal(dom.modalRenameNucleus);
   });
 
   dom.formCreateNucleus.addEventListener('submit', (e) => {
     e.preventDefault();
-    const name = dom.inputNewNucleusName.value.trim();
-    if (name) {
-      createNewNucleus(name);
-      dom.modalNewNucleus.classList.add('hidden');
-      dom.inputNewNucleusName.value = '';
-    }
+    closeModal(dom.modalNewNucleus);
   });
 
   dom.btnCustomizeCircles.addEventListener('click', openCircleCustomizerModal);
-  dom.btnSaveCircleSettings.addEventListener('click', saveCircleSettings);
   initSearch();
   initBooksEditors();
   dom.fontSizeSlider.addEventListener('input', () => {
-    // nivel = último punto de control sobrepasado (vista previa en directo)
-    setFontSizeUI(Math.floor(parseFloat(dom.fontSizeSlider.value) + 1e-6), false);
+    // nivel = último punto de control sobrepasado; se aplica y se guarda solo
+    const level = Math.floor(parseFloat(dom.fontSizeSlider.value) + 1e-6);
+    setFontSizeUI(level, false);
+    if (state.activeNucleus.fontLevel !== level) {
+      state.activeNucleus.fontLevel = level;
+      renderCanvas();
+      scheduleCustomizerSave();
+    }
+  });
+  dom.circleCustomizersContainer.addEventListener('input', () => {
+    applyCustomizerInputs();
     renderCanvas();
+    renderParticipantsList();
+    scheduleCustomizerSave();
   });
-  // al cerrar sin guardar, volver al tamaño guardado
-  dom.modalCustomizeCircles.querySelectorAll('[data-close-modal]').forEach((btn) => {
-    btn.addEventListener('click', () => { fontPreviewLevel = null; renderCanvas(); });
-  });
+  initModals();
   dom.btnShowList.addEventListener('click', toggleListView);
   initKeyboardShortcuts();
   // Formulario de alta: Intro añade (Mayús+Intro = salto de línea en el texto largo)
@@ -1253,10 +1251,7 @@ function openAddParticipantMenu() {
 
 // Cierra todo lo que esté abierto (guardando lo que haya en el menú lateral)
 function closeEverything() {
-  document.querySelectorAll('.modal-overlay:not(.hidden)').forEach((m) => {
-    const closeBtn = m.querySelector('[data-close-modal]');
-    if (closeBtn) closeBtn.click(); else m.classList.add('hidden');
-  });
+  document.querySelectorAll('.modal-overlay:not(.hidden)').forEach((m) => closeModal(m));
   dom.nucleusDropdown.classList.add('hidden');
   if (!dom.searchBox.classList.contains('hidden')) closeSearch();
   closePersonPop();
@@ -1701,16 +1696,12 @@ function focusParticipant(id) {
 
 // ---- Tamaño de los nombres (5 niveles) ----
 const FONT_LEVEL_SCALES = [1, 1.35, 1.75, 2.2, 2.75];
-let fontPreviewLevel = null;
-
 function currentFontLevel() {
-  if (fontPreviewLevel !== null) return fontPreviewLevel;
   const lvl = state.activeNucleus && state.activeNucleus.fontLevel;
   return Number.isInteger(lvl) && lvl >= 0 && lvl < FONT_LEVEL_SCALES.length ? lvl : 0;
 }
 
 function setFontSizeUI(level, moveThumb) {
-  fontPreviewLevel = level;
   if (moveThumb) dom.fontSizeSlider.value = level;
   dom.fontSizeValue.textContent = `Nivel ${level + 1}`;
   document.querySelectorAll('.fs-ticks span').forEach((t) => {
@@ -1736,25 +1727,82 @@ function openCircleCustomizerModal() {
   dom.modalCustomizeCircles.classList.remove('hidden');
 }
 
-function saveCircleSettings() {
+// Pasa lo escrito en «Personalizar» al núcleo activo
+function applyCustomizerInputs() {
   state.activeNucleus.circles.forEach((circle, idx) => {
     const nameInput = document.getElementById(`circle-name-${idx}`);
     const colorInput = document.getElementById(`circle-color-${idx}`);
-    if (nameInput && colorInput) {
-      circle.name = nameInput.value.trim() || `Círculo ${idx + 1}`;
-      circle.color = colorInput.value;
-    }
+    if (nameInput) circle.name = nameInput.value.trim() || `Círculo ${idx + 1}`;
+    if (colorInput) circle.color = colorInput.value;
   });
-  state.activeNucleus.fontLevel = currentFontLevel();
-  fontPreviewLevel = null;
+  const entry = state.nucleiList.find((n) => n.id === state.activeNucleus.id);
+  if (entry) { entry.circles = state.activeNucleus.circles; entry.fontLevel = state.activeNucleus.fontLevel; }
+}
 
+let customizerSaveTimer = null;
+function scheduleCustomizerSave() {
+  clearTimeout(customizerSaveTimer);
+  customizerSaveTimer = setTimeout(flushCustomizerSave, 500);
+}
+
+function flushCustomizerSave() {
+  const pending = customizerSaveTimer !== null;
+  clearTimeout(customizerSaveTimer);
+  customizerSaveTimer = null;
+  if (!pending) return;
   saveLocalState();
   if (state.user) saveNucleusDoc(state.activeNucleus);
+}
 
-  dom.modalCustomizeCircles.classList.add('hidden');
-  renderCanvas();
-  renderParticipantsList();
-  showToast('Configuración de círculos guardada.');
+// ---- Ventanas (modales): sin botones de guardar/cerrar ----
+// Cada ventana guarda al cerrarse (clic fuera, Intro o Ctrl+Z). Esc cancela.
+const modalOnClose = {
+  'modal-customize-circles': () => {
+    applyCustomizerInputs();
+    flushCustomizerSave();
+  },
+  'modal-new-nucleus': () => {
+    const name = dom.inputNewNucleusName.value.trim();
+    dom.inputNewNucleusName.value = '';
+    if (name) createNewNucleus(name);
+  },
+  'modal-rename-nucleus': () => {
+    const name = dom.inputRenameNucleus.value.trim();
+    const id = dom.formRenameNucleus.dataset.nucleusId;
+    const current = (state.nucleiList.find((n) => n.id === id) || state.activeNucleus).name;
+    if (name && name !== current) renameNucleus(id, name);
+  }
+};
+const modalOnCancel = {
+  'modal-new-nucleus': () => { dom.inputNewNucleusName.value = ''; }
+};
+
+function closeModal(modal, { cancel = false } = {}) {
+  if (!modal || modal.classList.contains('hidden')) return;
+  const fn = cancel ? modalOnCancel[modal.id] : modalOnClose[modal.id];
+  modal.classList.add('hidden');
+  if (fn) fn();
+  // en «Personalizar», Esc también guarda (todo se aplica en directo)
+  if (cancel && modal.id === 'modal-customize-circles') modalOnClose[modal.id]();
+}
+
+function initModals() {
+  document.querySelectorAll('.modal-overlay').forEach((overlay) => {
+    let downOnOverlay = false;
+    overlay.addEventListener('pointerdown', (e) => { downOnOverlay = e.target === overlay; });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay && downOnOverlay) closeModal(overlay);
+      downOnOverlay = false;
+    });
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const open = [...document.querySelectorAll('.modal-overlay')].filter((m) => !m.classList.contains('hidden'));
+    if (!open.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeModal(open[open.length - 1], { cancel: true });
+  }, true);
 }
 
 function updateAuthUI() {
