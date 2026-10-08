@@ -52,6 +52,14 @@ const dom = {
   canvasContainer: document.getElementById('canvas-container'),
   svgCanvas: document.getElementById('circles-canvas'),
   personPop: document.getElementById('person-pop'),
+  btnOpenSearch: document.getElementById('btn-open-search'),
+  searchBox: document.getElementById('search-box'),
+  searchInput: document.getElementById('search-input'),
+  searchCount: document.getElementById('search-count'),
+  searchPrev: document.getElementById('search-prev'),
+  searchNext: document.getElementById('search-next'),
+  searchClose: document.getElementById('search-close'),
+  searchInComments: document.getElementById('search-in-comments'),
   circlesLayer: document.getElementById('circles-layer'),
   participantsLayer: document.getElementById('participants-layer'),
   formAddParticipant: document.getElementById('form-add-participant'),
@@ -175,6 +183,7 @@ function initEventListeners() {
 
   dom.btnCustomizeCircles.addEventListener('click', openCircleCustomizerModal);
   dom.btnSaveCircleSettings.addEventListener('click', saveCircleSettings);
+  initSearch();
   dom.fontSizeSlider.addEventListener('input', () => {
     // nivel = último punto de control sobrepasado (vista previa en directo)
     setFontSizeUI(Math.floor(parseFloat(dom.fontSizeSlider.value) + 1e-6), false);
@@ -239,6 +248,7 @@ function updateCanvasShift() {
   // en pantallas estrechas el panel tapa casi todo: no desplazamos
   const shift = open && cw - reserved > 240 ? reserved / 2 : 0;
   dom.canvasContainer.style.setProperty('--canvas-shift', shift + 'px');
+  dom.canvasContainer.style.setProperty('--search-right', (shift ? reserved : 18) + 'px');
 }
 
 let sideMenuObserver = null;
@@ -561,6 +571,7 @@ function renderCanvas() {
     dom.participantsLayer.appendChild(g);
   });
 
+  applySearchHighlights();
   applyViewBox();
 }
 
@@ -1055,6 +1066,147 @@ async function handleInviteLink(nucleusId) {
     showToast('Inicia sesión para unirte al núcleo compartido.');
     openAuthModal('login');
   }
+}
+
+// ---- Buscador propio (Ctrl+F) ----
+const search = { results: [], index: -1 };
+const SEARCH_ZOOM = 6; // zoom mínimo al saltar a un resultado
+
+function normalizeText(str) {
+  return String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function initSearch() {
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'f') {
+      // segundo Ctrl+F con el buscador ya activo → buscador del navegador
+      if (!dom.searchBox.classList.contains('hidden') && document.activeElement === dom.searchInput) return;
+      e.preventDefault();
+      openSearch();
+    }
+  });
+  dom.btnOpenSearch.addEventListener('click', openSearch);
+  dom.searchInput.addEventListener('input', () => runSearch(true));
+  dom.searchInComments.addEventListener('change', () => { runSearch(true); dom.searchInput.focus(); });
+  dom.searchNext.addEventListener('click', () => { stepSearch(1); dom.searchInput.focus(); });
+  dom.searchPrev.addEventListener('click', () => { stepSearch(-1); dom.searchInput.focus(); });
+  dom.searchClose.addEventListener('click', closeSearch);
+  dom.searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); stepSearch(1); }
+    else if (e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey)) { e.preventDefault(); stepSearch(-1); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSearch(); }
+  });
+}
+
+function openSearch() {
+  dom.searchBox.classList.remove('hidden');
+  dom.searchInput.focus();
+  dom.searchInput.select();
+  if (dom.searchInput.value) runSearch(false);
+}
+
+function closeSearch() {
+  dom.searchBox.classList.add('hidden');
+  search.results = [];
+  search.index = -1;
+  applySearchHighlights();
+}
+
+function createdTime(p) {
+  const t = Date.parse(p.createdAt);
+  if (!isNaN(t)) return t;
+  const m = /^p_(\d+)/.exec(p.id || '');
+  return m ? Number(m[1]) : 0;
+}
+
+function runSearch(jump) {
+  const q = normalizeText(dom.searchInput.value.trim());
+  const prevId = search.results[search.index];
+  if (!q) {
+    search.results = [];
+    search.index = -1;
+  } else {
+    const inComments = dom.searchInComments.checked;
+    search.results = state.participants
+      .filter((p) => !p.archived)
+      .filter((p) => normalizeText(p.name).includes(q) || (inComments && normalizeText(p.comments).includes(q)))
+      .sort((a, b) => createdTime(a) - createdTime(b))
+      .map((p) => p.id);
+    // si el resultado actual sigue valiendo, nos quedamos en él
+    const keep = search.results.indexOf(prevId);
+    search.index = search.results.length ? (keep >= 0 ? keep : 0) : -1;
+  }
+  updateSearchCount();
+  applySearchHighlights();
+  if (jump && search.index >= 0 && search.results[search.index] !== prevId) focusParticipant(search.results[search.index]);
+}
+
+function stepSearch(dir) {
+  if (!search.results.length) { runSearch(true); return; }
+  const n = search.results.length;
+  search.index = (search.index + dir + n) % n; // al final vuelve al primero
+  updateSearchCount();
+  applySearchHighlights();
+  focusParticipant(search.results[search.index]);
+}
+
+function updateSearchCount() {
+  const hasQuery = dom.searchInput.value.trim() !== '';
+  dom.searchCount.textContent = !hasQuery ? '' : search.results.length ? `${search.index + 1}/${search.results.length}` : '0/0';
+  dom.searchBox.classList.toggle('no-results', hasQuery && !search.results.length);
+}
+
+function applySearchHighlights() {
+  if (!dom.participantsLayer) return;
+  const active = search.results.length > 0;
+  const matches = new Set(search.results);
+  const current = search.results[search.index];
+  dom.participantsLayer.classList.toggle('searching', active);
+  dom.participantsLayer.querySelectorAll('.participant-node').forEach((g) => {
+    g.classList.toggle('search-match', matches.has(g.dataset.id));
+    g.classList.toggle('search-current', g.dataset.id === current);
+  });
+  // el resultado actual, encima del resto
+  const cur = current && dom.participantsLayer.querySelector(`[data-id="${current}"]`);
+  if (cur) dom.participantsLayer.appendChild(cur);
+}
+
+let viewAnim = null;
+function focusParticipant(id) {
+  const p = state.participants.find((item) => item.id === id);
+  if (!p || !view.w) return;
+  const centerX = view.w / 2;
+  const centerY = view.h / 2;
+  const rect = dom.canvasContainer.getBoundingClientRect();
+  const width = rect.width;
+  const freeW = width - sidebarReservedWidth() > 240 ? width - sidebarReservedWidth() : width;
+  const maxRadius = Math.min(freeW, rect.height) * WORLD_SCALE * 0.46;
+  const wx = centerX + (p.normX || 0) * maxRadius;
+  const wy = centerY + (p.normY || 0) * maxRadius;
+
+  const toZoom = Math.max(view.zoom, SEARCH_ZOOM);
+  // punto de pantalla donde queremos el resultado: centro de la zona visible
+  const b = visibleCanvasBounds();
+  const svgRect = dom.svgCanvas.getBoundingClientRect();
+  const sx = (b.left + b.right) / 2 - svgRect.left;
+  const sy = (b.top + b.bottom) / 2 - svgRect.top;
+  const k = view.screenW / (view.w / toZoom);
+  const to = { zoom: toZoom, x: wx - sx / k, y: wy - sy / k };
+  const from = { zoom: view.zoom, x: view.x, y: view.y };
+
+  if (viewAnim) cancelAnimationFrame(viewAnim);
+  const t0 = performance.now();
+  const DUR = 450;
+  const step = (t) => {
+    const u = Math.min(1, (t - t0) / DUR);
+    const e = 1 - Math.pow(1 - u, 3);
+    view.zoom = from.zoom + (to.zoom - from.zoom) * e;
+    view.x = from.x + (to.x - from.x) * e;
+    view.y = from.y + (to.y - from.y) * e;
+    applyViewBox();
+    viewAnim = u < 1 ? requestAnimationFrame(step) : null;
+  };
+  viewAnim = requestAnimationFrame(step);
 }
 
 // ---- Tamaño de los nombres (5 niveles) ----
