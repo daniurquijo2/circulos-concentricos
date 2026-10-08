@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610081412';
+} from './firebase-config.js?v=202610081416';
 
 export const state = {
   user: null,
@@ -83,6 +83,7 @@ const dom = {
   detailComments: document.getElementById('detail-comments'),
   detailNextSteps: document.getElementById('detail-next-steps'),
   detailBooksEditor: document.getElementById('detail-books-editor'),
+  detailSaveStatus: document.getElementById('detail-save-status'),
   addBooksEditor: document.getElementById('add-books-editor'),
   detailCreatedAt: document.getElementById('detail-created-at'),
   detailUpdatedAt: document.getElementById('detail-updated-at'),
@@ -247,6 +248,20 @@ function initEventListeners() {
 
   dom.btnBackToList.addEventListener('click', () => showSideView('main'));
   dom.formEditParticipant.addEventListener('submit', handleSaveParticipantDetail);
+  [dom.detailName, dom.detailAge, dom.detailComments, dom.detailNextSteps].forEach((el) => {
+    el.addEventListener('input', scheduleDetailAutosave);
+    el.addEventListener('blur', () => { if (detailSaveTimer) flushDetailAutosave(); });
+  });
+  // Clic fuera del menú con un perfil abierto: guardar y cerrar el menú
+  document.addEventListener('pointerdown', (e) => {
+    if (!isDetailOpen() || dom.sideMenu.classList.contains('collapsed')) return;
+    const t = e.target;
+    if (dom.sideMenu.contains(t)) return;
+    if (t.closest('.modal-overlay') || t.closest('#person-pop') || t.closest('#btn-toggle-menu')) return;
+    flushDetailAutosave();
+    showSideView('main');
+    toggleSidebar();
+  }, true);
   // Intro guarda; Mayús+Intro hace salto de línea en los textos largos
   dom.formEditParticipant.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.isComposing) return;
@@ -1143,6 +1158,10 @@ function openParticipantDetail(id) {
   const p = state.participants.find(item => item.id === id);
   if (!p) return;
 
+  if (isDetailOpen() && dom.detailId.value && dom.detailId.value !== id) flushDetailAutosave();
+  clearTimeout(detailSaveTimer);
+  detailSaveTimer = null;
+  setSaveStatus('Los cambios se guardan automáticamente');
   state.selectedParticipantId = id;
   dom.detailId.value = p.id;
   dom.detailName.value = p.name;
@@ -1177,6 +1196,7 @@ function focusNextStepsField() {
 }
 
 function showSideView(view) {
+  if (view !== 'detail' && isDetailOpen()) flushDetailAutosave();
   if (view === 'detail') {
     dom.sideViewMain.classList.add('hidden');
     dom.sideViewDetail.classList.remove('hidden');
@@ -1191,26 +1211,74 @@ function showSideView(view) {
   }
 }
 
-function handleSaveParticipantDetail(e) {
-  e.preventDefault();
-  const id = dom.detailId.value;
-  const p = state.participants.find(item => item.id === id);
+// ---- Guardado automático del perfil ----
+let detailSaveTimer = null;
+let detailStatusTimer = null;
+
+function setSaveStatus(text, cls) {
+  if (!dom.detailSaveStatus) return;
+  dom.detailSaveStatus.textContent = text;
+  dom.detailSaveStatus.className = 'save-status' + (cls ? ' ' + cls : '');
+}
+
+function scheduleDetailAutosave() {
+  clearTimeout(detailSaveTimer);
+  setSaveStatus('Guardando…', 'pending');
+  detailSaveTimer = setTimeout(flushDetailAutosave, 600);
+}
+
+// Pasa lo escrito en el perfil a la persona y lo guarda (solo si hay cambios)
+function flushDetailAutosave() {
+  clearTimeout(detailSaveTimer);
+  detailSaveTimer = null;
+  const p = state.participants.find((item) => item.id === dom.detailId.value);
   if (!p) return;
 
-  p.name = dom.detailName.value.trim();
-  p.age = dom.detailAge.value ? parseInt(dom.detailAge.value, 10) : null;
-  p.comments = dom.detailComments.value.trim();
-  p.nextSteps = dom.detailNextSteps.value.trim();
+  const name = dom.detailName.value.trim();
+  const age = dom.detailAge.value ? parseInt(dom.detailAge.value, 10) : null;
+  const comments = dom.detailComments.value.trim();
+  const nextSteps = dom.detailNextSteps.value.trim();
+
+  const changed = (name && name !== p.name) || age !== (p.age ?? null)
+    || comments !== (p.comments || '') || nextSteps !== (p.nextSteps || '');
+  if (!changed) {
+    if (!name) setSaveStatus('El nombre no puede quedar vacío', 'error');
+    else setSaveStatus('Guardado ✓', 'ok');
+    return;
+  }
+
+  if (name) p.name = name;
+  p.age = age;
+  p.comments = comments;
+  p.nextSteps = nextSteps;
   p.updatedAt = new Date().toISOString();
 
   saveParticipant(p);
   renderCanvas();
   renderParticipantsList();
-  showToast('Cambios guardados correctamente');
+  if (popState.id === p.id) openPersonPop(p.id);
+  dom.detailUpdatedAt.textContent = new Date(p.updatedAt).toLocaleString();
+  if (!name) setSaveStatus('El nombre no puede quedar vacío', 'error');
+  else setSaveStatus('Guardado ✓', 'ok');
+  clearTimeout(detailStatusTimer);
+  detailStatusTimer = setTimeout(() => {
+    if (!detailSaveTimer) setSaveStatus('Los cambios se guardan automáticamente');
+  }, 2500);
+}
+
+function isDetailOpen() {
+  return !dom.sideViewDetail.classList.contains('hidden');
+}
+
+// Intro (en el perfil): guardar y volver
+function handleSaveParticipantDetail(e) {
+  e.preventDefault();
+  flushDetailAutosave();
   showSideView('main');
 }
 
 function handleToggleArchive() {
+  flushDetailAutosave();
   const id = dom.detailId.value;
   const p = state.participants.find(item => item.id === id);
   if (!p) return;
@@ -1226,6 +1294,8 @@ function handleToggleArchive() {
 }
 
 function handleDeleteParticipant() {
+  clearTimeout(detailSaveTimer);
+  detailSaveTimer = null;
   const id = dom.detailId.value;
   const p = state.participants.find(item => item.id === id);
   if (!p) return;

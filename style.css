@@ -819,6 +819,18 @@ textarea { resize: vertical; line-height: 1.55; }
   transition: var(--transition);
 }
 .btn-save:hover { filter: brightness(1.08); }
+.save-status {
+  text-align: center;
+  padding: 6px 0 2px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  transition: color 0.2s;
+}
+.save-status.pending { color: var(--text-muted); }
+.save-status.ok { color: var(--ok); }
+.save-status.error { color: var(--danger); }
 .btn-archive {
   background: transparent;
   color: var(--text-soft);

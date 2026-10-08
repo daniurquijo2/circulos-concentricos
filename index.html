@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Círculos Concéntricos - Gestión de Participantes</title>
-  <link rel="stylesheet" href="style.css?v=202610081412" />
+  <link rel="stylesheet" href="style.css?v=202610081416" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -224,14 +224,14 @@
             <div class="form-group">
               <label for="detail-next-steps">Próximos pasos</label>
               <textarea id="detail-next-steps" rows="5" placeholder="Qué queremos hacer con esta persona las próximas semanas..."></textarea>
-              <span class="field-hint">Intro para guardar · Mayús+Intro para nueva línea</span>
+              <span class="field-hint">Mayús+Intro para nueva línea · Intro para cerrar</span>
             </div>
             <div class="timestamps-info">
               <div>Añadido: <span id="detail-created-at">-</span></div>
               <div>Modificado: <span id="detail-updated-at">-</span></div>
             </div>
             <div class="detail-actions">
-              <button type="submit" class="btn-save">Guardar Cambios</button>
+              <div id="detail-save-status" class="save-status" aria-live="polite">Los cambios se guardan automáticamente</div>
               <button type="button" id="btn-archive-participant" class="btn-archive">Archivar</button>
               <button type="button" id="btn-delete-participant" class="btn-delete">Eliminar</button>
             </div>
@@ -327,7 +327,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="app.js?v=202610081412"></script>
+  <script type="module" src="app.js?v=202610081416"></script>
   <script>
   (function () {
     const menu = document.getElementById('side-menu');
