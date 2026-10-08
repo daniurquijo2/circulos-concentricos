@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610081410';
+} from './firebase-config.js?v=202610081412';
 
 export const state = {
   user: null,
@@ -494,7 +494,13 @@ function createBooksEditor(root, getModel, onChange) {
       const m = getModel();
       if (!m) return;
       const set = new Set(Array.isArray(m.books) ? m.books : []);
-      if (set.has(b.n)) set.delete(b.n); else set.add(b.n);
+      if (set.has(b.n)) {
+        set.delete(b.n);
+      } else {
+        set.add(b.n);
+        // al completarlo, deja de estar «haciendo ahora»
+        if (Array.isArray(m.doing)) m.doing = m.doing.filter((x) => x !== b.n);
+      }
       m.books = [...set].sort((x, y) => x - y);
       update();
       onChange(m);
