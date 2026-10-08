@@ -224,6 +224,22 @@
         <h3>Personalizar Círculos Concéntricos</h3>
         <p>Modifica el nombre y el color de cada nivel concéntrico:</p>
         <div id="circle-customizers-container" class="circle-customizers"></div>
+        <div class="font-size-setting">
+          <div class="font-size-head">
+            <label for="font-size-slider">Tamaño de los nombres</label>
+            <span id="font-size-value" class="font-size-value">Nivel 1</span>
+          </div>
+          <div class="font-size-control">
+            <span class="fs-letter small">A</span>
+            <div class="fs-slider-wrap">
+              <div class="fs-ticks" aria-hidden="true">
+                <span data-level="0"></span><span data-level="1"></span><span data-level="2"></span><span data-level="3"></span><span data-level="4"></span>
+              </div>
+              <input type="range" id="font-size-slider" class="fs-slider" min="0" max="4" step="0.01" value="0" />
+            </div>
+            <span class="fs-letter big">A</span>
+          </div>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn-cancel" data-close-modal>Cerrar</button>
           <button type="button" id="btn-save-circle-settings" class="btn-primary">Guardar Configuración</button>

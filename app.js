@@ -83,6 +83,8 @@ const dom = {
   modalCustomizeCircles: document.getElementById('modal-customize-circles'),
   circleCustomizersContainer: document.getElementById('circle-customizers-container'),
   btnSaveCircleSettings: document.getElementById('btn-save-circle-settings'),
+  fontSizeSlider: document.getElementById('font-size-slider'),
+  fontSizeValue: document.getElementById('font-size-value'),
   modalAuth: document.getElementById('modal-auth'),
   formAuth: document.getElementById('form-auth'),
   authModalTitle: document.getElementById('auth-modal-title'),
@@ -173,6 +175,15 @@ function initEventListeners() {
 
   dom.btnCustomizeCircles.addEventListener('click', openCircleCustomizerModal);
   dom.btnSaveCircleSettings.addEventListener('click', saveCircleSettings);
+  dom.fontSizeSlider.addEventListener('input', () => {
+    // nivel = último punto de control sobrepasado (vista previa en directo)
+    setFontSizeUI(Math.floor(parseFloat(dom.fontSizeSlider.value) + 1e-6), false);
+    renderCanvas();
+  });
+  // al cerrar sin guardar, volver al tamaño guardado
+  dom.modalCustomizeCircles.querySelectorAll('[data-close-modal]').forEach((btn) => {
+    btn.addEventListener('click', () => { fontPreviewLevel = null; renderCanvas(); });
+  });
   dom.btnToggleMenu.addEventListener('click', toggleSidebar);
   dom.formAddParticipant.addEventListener('submit', handleAddParticipant);
 
@@ -512,8 +523,9 @@ function renderCanvas() {
     g.setAttribute('transform', `translate(${px}, ${py})`);
     g.dataset.id = p.id;
 
-    const textWidth = Math.max(54, p.name.length * 5.7 + 18);
-    const textHeight = 20;
+    const fs = FONT_LEVEL_SCALES[currentFontLevel()];
+    const textWidth = Math.max(54, p.name.length * 5.7 + 18) * fs;
+    const textHeight = 20 * fs;
 
     const rectEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rectEl.setAttribute('x', -textWidth / 2);
@@ -521,6 +533,7 @@ function renderCanvas() {
     rectEl.setAttribute('width', textWidth);
     rectEl.setAttribute('height', textHeight);
     rectEl.setAttribute('class', 'participant-chip-rect');
+    rectEl.style.rx = 10 * fs;
 
     const circleInfo = state.activeNucleus.circles[p.circleIndex];
     if (circleInfo) {
@@ -535,6 +548,7 @@ function renderCanvas() {
     text.setAttribute('x', 0);
     text.setAttribute('y', 1);
     text.setAttribute('class', 'participant-chip-text');
+    text.style.fontSize = (9.5 * fs) + 'px';
     text.setAttribute('fill', '#0f172a');
     text.textContent = p.name;
 
@@ -1043,7 +1057,27 @@ async function handleInviteLink(nucleusId) {
   }
 }
 
+// ---- Tamaño de los nombres (5 niveles) ----
+const FONT_LEVEL_SCALES = [1, 1.35, 1.75, 2.2, 2.75];
+let fontPreviewLevel = null;
+
+function currentFontLevel() {
+  if (fontPreviewLevel !== null) return fontPreviewLevel;
+  const lvl = state.activeNucleus && state.activeNucleus.fontLevel;
+  return Number.isInteger(lvl) && lvl >= 0 && lvl < FONT_LEVEL_SCALES.length ? lvl : 0;
+}
+
+function setFontSizeUI(level, moveThumb) {
+  fontPreviewLevel = level;
+  if (moveThumb) dom.fontSizeSlider.value = level;
+  dom.fontSizeValue.textContent = `Nivel ${level + 1}`;
+  document.querySelectorAll('.fs-ticks span').forEach((t) => {
+    t.classList.toggle('passed', Number(t.dataset.level) <= level);
+  });
+}
+
 function openCircleCustomizerModal() {
+  setFontSizeUI(currentFontLevel(), true);
   dom.circleCustomizersContainer.innerHTML = '';
   state.activeNucleus.circles.forEach((circle, idx) => {
     const row = document.createElement('div');
@@ -1069,6 +1103,8 @@ function saveCircleSettings() {
       circle.color = colorInput.value;
     }
   });
+  state.activeNucleus.fontLevel = currentFontLevel();
+  fontPreviewLevel = null;
 
   saveLocalState();
   if (state.user) saveNucleusDoc(state.activeNucleus);
