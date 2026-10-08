@@ -60,7 +60,7 @@ a:hover { color: #F5CE9E; }
 }
 
 .brand { display: flex; align-items: center; gap: 10px; flex: none; }
-.brand svg { width: 22px; height: 22px; }
+.brand svg { width: 28px; height: 28px; }
 .brand-name {
   font-family: var(--font-display);
   font-size: 15px;

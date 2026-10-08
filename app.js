@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610081419';
+} from './firebase-config.js?v=202610081442';
 
 export const state = {
   user: null,
