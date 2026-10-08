@@ -57,6 +57,7 @@ const dom = {
   inputName: document.getElementById('input-name'),
   inputAge: document.getElementById('input-age'),
   inputComments: document.getElementById('input-comments'),
+  inputNextSteps: document.getElementById('input-next-steps'),
   participantCount: document.getElementById('participant-count'),
   toggleGroupCircles: document.getElementById('toggle-group-circles'),
   selectSort: document.getElementById('select-sort'),
@@ -70,6 +71,7 @@ const dom = {
   detailName: document.getElementById('detail-name'),
   detailAge: document.getElementById('detail-age'),
   detailComments: document.getElementById('detail-comments'),
+  detailNextSteps: document.getElementById('detail-next-steps'),
   detailCreatedAt: document.getElementById('detail-created-at'),
   detailUpdatedAt: document.getElementById('detail-updated-at'),
   btnArchiveParticipant: document.getElementById('btn-archive-participant'),
@@ -525,6 +527,7 @@ function handleAddParticipant(e) {
 
   const age = dom.inputAge.value ? parseInt(dom.inputAge.value, 10) : null;
   const comments = dom.inputComments.value.trim();
+  const nextSteps = dom.inputNextSteps.value.trim();
 
   const angle = Math.random() * Math.PI * 2;
   const normX = 1.15 * Math.cos(angle);
@@ -535,6 +538,7 @@ function handleAddParticipant(e) {
     name,
     age,
     comments,
+    nextSteps,
     normX,
     normY,
     circleIndex: -1,
@@ -550,6 +554,7 @@ function handleAddParticipant(e) {
   dom.inputName.value = '';
   dom.inputAge.value = '';
   dom.inputComments.value = '';
+  dom.inputNextSteps.value = '';
 
   renderCanvas();
   renderParticipantsList();
@@ -699,6 +704,7 @@ function openParticipantDetail(id) {
   dom.detailName.value = p.name;
   dom.detailAge.value = p.age || '';
   dom.detailComments.value = p.comments || '';
+  dom.detailNextSteps.value = p.nextSteps || '';
 
   const circle = state.activeNucleus.circles[p.circleIndex];
   dom.detailCircleName.textContent = circle ? circle.name : 'Exterior / Sin asignar';
@@ -729,6 +735,7 @@ function handleSaveParticipantDetail(e) {
   p.name = dom.detailName.value.trim();
   p.age = dom.detailAge.value ? parseInt(dom.detailAge.value, 10) : null;
   p.comments = dom.detailComments.value.trim();
+  p.nextSteps = dom.detailNextSteps.value.trim();
   p.updatedAt = new Date().toISOString();
 
   saveParticipant(p);

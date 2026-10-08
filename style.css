@@ -443,7 +443,8 @@ a:hover { color: #F5CE9E; }
 }
 .required { color: var(--danger); }
 .form-row { display: flex; gap: 12px; }
-.flex-1 { flex: 1; }
+.flex-1 { flex: 1; min-width: 0; }
+.age-field { flex: none; width: 84px; }
 
 input[type="text"], input[type="number"], input[type="email"], input[type="password"], textarea, select {
   width: 100%;
