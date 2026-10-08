@@ -207,13 +207,60 @@ function toggleSidebar() {
   } else {
     dom.sideMenu.classList.add('collapsed');
   }
-  setTimeout(() => renderCanvas(), 300);
+}
+
+// ---- Desplazamiento del lienzo cuando el menú lateral está abierto ----
+// Con el menú abierto, el centro de los círculos se mueve al centro de la zona
+// libre (a la izquierda del panel); al cerrarlo vuelve al centro de la pantalla.
+function sidebarReservedWidth() {
+  // anchura del panel + margen derecho (18px) + un pequeño respiro
+  return (dom.sideMenu ? dom.sideMenu.offsetWidth : 372) + 18 + 18;
+}
+
+function updateCanvasShift() {
+  if (!dom.canvasContainer || !dom.sideMenu) return;
+  const open = !dom.sideMenu.classList.contains('collapsed');
+  const cw = dom.canvasContainer.clientWidth;
+  const reserved = sidebarReservedWidth();
+  // en pantallas estrechas el panel tapa casi todo: no desplazamos
+  const shift = open && cw - reserved > 240 ? reserved / 2 : 0;
+  dom.canvasContainer.style.setProperty('--canvas-shift', shift + 'px');
+}
+
+let sideMenuObserver = null;
+function observeSideMenu() {
+  if (sideMenuObserver || !dom.sideMenu) return;
+  sideMenuObserver = new MutationObserver(updateCanvasShift);
+  sideMenuObserver.observe(dom.sideMenu, { attributes: true, attributeFilter: ['class'] });
+  updateCanvasShift();
 }
 
 // ---- Zoom del lienzo (rueda del ratón) ----
-const view = { zoom: 1, x: 0, y: 0, w: 0, h: 0 };
+// El "mundo" es WORLD_SCALE veces más grande que la pantalla: con el zoom al
+// mínimo se ven todos los círculos (las fichas quedan pequeñas) y al acercarse
+// cada círculo tiene sitio de sobra para los nombres.
+const WORLD_SCALE = 4;
+const view = { zoom: 1, x: 0, y: 0, w: 0, h: 0, screenW: 0 };
 const ZOOM_MIN = 1;
-const ZOOM_MAX = 6;
+const ZOOM_MAX = 12;
+
+// píxeles de pantalla por unidad del lienzo
+function pxPerUnit() {
+  if (!view.w) return 1;
+  return view.screenW / (view.w / view.zoom);
+}
+
+// Los títulos de los círculos mantienen un tamaño legible en pantalla
+// independientemente del zoom.
+function updateCircleTitles() {
+  if (!dom.circlesLayer) return;
+  const k = 1 / pxPerUnit();
+  dom.circlesLayer.querySelectorAll('.circle-title-text').forEach((t) => {
+    const top = parseFloat(t.dataset.top);
+    t.setAttribute('font-size', (12 * k).toFixed(3));
+    t.setAttribute('y', top + 20 * k);
+  });
+}
 
 function applyViewBox() {
   if (view.w < 2 || view.h < 2) return;
@@ -224,10 +271,11 @@ function applyViewBox() {
   view.y = Math.min(Math.max(view.y, 0), view.h - vh);
   dom.svgCanvas.setAttribute('viewBox', `${view.x} ${view.y} ${vw} ${vh}`);
   dom.canvasContainer.dataset.zoomed = view.zoom > 1.01 ? 'true' : 'false';
+  updateCircleTitles();
 }
 
 function zoomAt(clientX, clientY, factor) {
-  const rect = dom.canvasContainer.getBoundingClientRect();
+  const rect = dom.svgCanvas.getBoundingClientRect();
   const prev = view.zoom;
   const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, prev * factor));
   if (next === prev) return;
@@ -246,7 +294,7 @@ function initCanvasZoom() {
   dom.canvasContainer.addEventListener('wheel', (e) => {
     if (e.ctrlKey) return;
     e.preventDefault();
-    zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016));
+    zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.002));
   }, { passive: false });
 
   // doble clic en el fondo: volver a la vista completa
@@ -269,6 +317,7 @@ function observeCanvasSize() {
     renderCanvas();
   });
   canvasObserver.observe(dom.canvasContainer);
+  observeSideMenu();
 }
 
 function renderCanvas() {
@@ -284,15 +333,26 @@ function renderCanvas() {
     return;
   }
   
-  if (view.w !== width || view.h !== height) {
-    view.w = width;
-    view.h = height;
+  updateCanvasShift();
+
+  const worldW = width * WORLD_SCALE;
+  const worldH = height * WORLD_SCALE;
+  if (view.w !== worldW || view.h !== worldH) {
+    // conservar la zona que se estaba mirando si cambia el tamaño
+    const ratio = view.w ? worldW / view.w : 1;
+    view.x *= ratio;
+    view.y *= ratio;
+    view.w = worldW;
+    view.h = worldH;
   }
-  applyViewBox();
-  
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const maxRadius = Math.min(width, height) * 0.42;
+  view.screenW = width;
+
+  const centerX = worldW / 2;
+  const centerY = worldH / 2;
+  // Radio calculado para que, con el zoom al mínimo, todo quepa en la zona que
+  // deja libre el menú lateral (así no cambia la geometría al abrirlo/cerrarlo).
+  const freeW = width - sidebarReservedWidth() > 240 ? width - sidebarReservedWidth() : width;
+  const maxRadius = Math.min(freeW, height) * WORLD_SCALE * 0.46;
 
   // 1. Círculos
   dom.circlesLayer.innerHTML = '';
@@ -311,10 +371,9 @@ function renderCanvas() {
     circleEl.dataset.circleId = circle.id;
     dom.circlesLayer.appendChild(circleEl);
 
-    const labelY = centerY - r + 18;
     const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     textEl.setAttribute('x', centerX);
-    textEl.setAttribute('y', labelY);
+    textEl.dataset.top = centerY - r;
     textEl.setAttribute('class', 'circle-title-text');
     textEl.setAttribute('fill', circle.color);
     textEl.textContent = circle.name;
@@ -373,6 +432,8 @@ function renderCanvas() {
 
     dom.participantsLayer.appendChild(g);
   });
+
+  applyViewBox();
 }
 
 function makeDraggable(element, participant, centerX, centerY, maxRadius) {
@@ -400,8 +461,9 @@ function makeDraggable(element, participant, centerX, centerY, maxRadius) {
 
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) element.dataset.dragged = 'true';
 
-    const newNormX = currentNormX + dx / (maxRadius * view.zoom);
-    const newNormY = currentNormY + dy / (maxRadius * view.zoom);
+    const k = maxRadius * pxPerUnit();
+    const newNormX = currentNormX + dx / k;
+    const newNormY = currentNormY + dy / k;
 
     const px = centerX + newNormX * maxRadius;
     const py = centerY + newNormY * maxRadius;
@@ -421,8 +483,9 @@ function makeDraggable(element, participant, centerX, centerY, maxRadius) {
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
 
-    participant.normX = currentNormX + dx / (maxRadius * view.zoom);
-    participant.normY = currentNormY + dy / (maxRadius * view.zoom);
+    const k = maxRadius * pxPerUnit();
+    participant.normX = currentNormX + dx / k;
+    participant.normY = currentNormY + dy / k;
     participant.updatedAt = new Date().toISOString();
 
     const distance = Math.sqrt(participant.normX * participant.normX + participant.normY * participant.normY);
