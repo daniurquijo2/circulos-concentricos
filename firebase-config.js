@@ -111,6 +111,13 @@ export async function saveNucleusDoc(nucleus) {
     { id: nucleus.id, name: data.name || "" }, { merge: true });
 }
 
+export async function renameNucleusDoc(nucleusId, name) {
+  if (!db || !auth || !auth.currentUser) return;
+  await fb.updateDoc(fb.doc(db, "nuclei", nucleusId), { name });
+  await fb.setDoc(fb.doc(db, "users", auth.currentUser.uid, "nuclei", nucleusId),
+    { id: nucleusId, name }, { merge: true });
+}
+
 /* --- Núcleos del usuario ----------------------------------------------- */
 
 export async function getUserNucleiList(userId) {
@@ -129,12 +136,21 @@ export async function getUserNucleiList(userId) {
 }
 
 export async function joinNucleusByInvite(nucleusId, userId) {
-  if (!db) return;
-  await fb.setDoc(fb.doc(db, "nuclei", nucleusId, "members", userId),
-    { uid: userId, joinedAt: fb.serverTimestamp() }, { merge: true });
+  if (!db) return null;
+  // 1) apuntarse como miembro (las reglas solo permiten añadirse a uno mismo)
+  const memberRef = fb.doc(db, "nuclei", nucleusId, "members", userId);
+  await fb.setDoc(memberRef, { uid: userId, joinedAt: fb.serverTimestamp() }, { merge: true });
 
+  // 2) comprobar que el núcleo existe de verdad
   const snap = await fb.getDoc(fb.doc(db, "nuclei", nucleusId));
-  const name = snap.exists() ? (snap.data().name || "Núcleo compartido") : "Núcleo compartido";
+  if (!snap.exists()) {
+    try { await fb.deleteDoc(memberRef); } catch (_) {}
+    return null;
+  }
+  const name = snap.data().name || "Núcleo compartido";
+
+  // 3) añadirlo a mi índice de núcleos
   await fb.setDoc(fb.doc(db, "users", userId, "nuclei", nucleusId),
     { id: nucleusId, name }, { merge: true });
+  return name;
 }

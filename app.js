@@ -9,7 +9,8 @@ import {
   saveParticipantDoc, 
   deleteParticipantDoc,
   getUserNucleiList,
-  joinNucleusByInvite
+  joinNucleusByInvite,
+  renameNucleusDoc
 } from './firebase-config.js';
 
 export const state = {
@@ -102,7 +103,11 @@ const dom = {
   authErrorMsg: document.getElementById('auth-error-msg'),
   btnToggleAuthMode: document.getElementById('btn-toggle-auth-mode'),
   authToggleText: document.getElementById('auth-toggle-text'),
-  toast: document.getElementById('toast')
+  toast: document.getElementById('toast'),
+  btnRenameNucleus: document.getElementById('btn-rename-nucleus'),
+  modalRenameNucleus: document.getElementById('modal-rename-nucleus'),
+  formRenameNucleus: document.getElementById('form-rename-nucleus'),
+  inputRenameNucleus: document.getElementById('input-rename-nucleus')
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -116,16 +121,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.addEventListener('resize', () => renderCanvas());
 
+  // Enlace de invitación: lo guardamos y lo procesamos cuando Firebase sepa
+  // si hay sesión (antes se perdía si la sesión aún no se había restaurado).
+  const urlParams = new URLSearchParams(window.location.search);
+  const joinId = urlParams.get('join');
+  if (joinId) {
+    setPendingJoin(joinId);
+    urlParams.delete('join');
+    const clean = window.location.pathname + (urlParams.toString() ? '?' + urlParams : '') + window.location.hash;
+    window.history.replaceState(null, '', clean);
+  }
+
   initFirebaseCloud((user) => {
     state.user = user;
     updateAuthUI();
-    if (user) loadUserCloudData();
+    if (user) {
+      loadUserCloudData();
+    } else if (getPendingJoin()) {
+      showToast('Inicia sesión o crea una cuenta para unirte al núcleo compartido.');
+      openAuthModal('login');
+    }
   });
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const joinId = urlParams.get('join');
-  if (joinId) handleInviteLink(joinId);
 });
+
+function setPendingJoin(id) {
+  try { localStorage.setItem('circulos_pending_join', id); } catch (_) {}
+}
+function getPendingJoin() {
+  try { return localStorage.getItem('circulos_pending_join'); } catch (_) { return null; }
+}
+function clearPendingJoin() {
+  try { localStorage.removeItem('circulos_pending_join'); } catch (_) {}
+}
 
 function saveLocalState() {
   localStorage.setItem('circulos_state', JSON.stringify({
@@ -170,6 +197,15 @@ function initEventListeners() {
   });
 
   dom.btnShareNucleus.addEventListener('click', copyInviteLink);
+
+  dom.btnRenameNucleus.addEventListener('click', () => openRenameNucleus(state.activeNucleusId));
+  dom.formRenameNucleus.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = dom.inputRenameNucleus.value.trim();
+    if (!name) return;
+    renameNucleus(dom.formRenameNucleus.dataset.nucleusId, name);
+    dom.modalRenameNucleus.classList.add('hidden');
+  });
 
   dom.formCreateNucleus.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -993,8 +1029,23 @@ function updateNucleusUI() {
 
   state.nucleiList.forEach(n => {
     const li = document.createElement('li');
-    li.textContent = n.name;
+    const label = document.createElement('span');
+    label.className = 'nucleus-item-name';
+    label.textContent = n.name;
+    li.appendChild(label);
     if (n.id === state.activeNucleusId) li.classList.add('active');
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'nucleus-rename-btn';
+    edit.title = 'Renombrar';
+    edit.innerHTML = '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.59 3.59a2 2 0 012.82 2.82l-8.5 8.5a1 1 0 01-.46.26l-3.2.8a.5.5 0 01-.6-.6l.8-3.2a1 1 0 01.26-.46l8.5-8.5z"/></svg>';
+    edit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openRenameNucleus(n.id);
+    });
+    li.appendChild(edit);
+
     li.addEventListener('click', () => {
       switchNucleus(n.id);
       dom.nucleusDropdown.classList.add('hidden');
@@ -1060,7 +1111,43 @@ function createNewNucleus(name) {
   showToast(`Núcleo "${name}" creado.`);
 }
 
+function openRenameNucleus(nucleusId) {
+  const n = state.nucleiList.find((item) => item.id === nucleusId)
+    || (state.activeNucleus.id === nucleusId ? state.activeNucleus : null);
+  dom.nucleusDropdown.classList.add('hidden');
+  dom.formRenameNucleus.dataset.nucleusId = nucleusId;
+  dom.inputRenameNucleus.value = n ? n.name : '';
+  dom.modalRenameNucleus.classList.remove('hidden');
+  dom.inputRenameNucleus.focus();
+  dom.inputRenameNucleus.select();
+}
+
+async function renameNucleus(nucleusId, name) {
+  const entry = state.nucleiList.find((item) => item.id === nucleusId);
+  if (entry) entry.name = name;
+  if (state.activeNucleusId === nucleusId || state.activeNucleus.id === nucleusId) state.activeNucleus.name = name;
+  saveLocalState();
+  updateNucleusUI();
+
+  if (state.user) {
+    try {
+      await renameNucleusDoc(nucleusId, name);
+    } catch (err) {
+      console.error(err);
+      showToast('No se pudo guardar el nombre en la nube.');
+      return;
+    }
+  }
+  showToast(`Núcleo renombrado a "${name}"`);
+}
+
 function copyInviteLink() {
+  if (!state.user) {
+    dom.nucleusDropdown.classList.add('hidden');
+    showToast('Inicia sesión para poder compartir este núcleo.');
+    openAuthModal('login');
+    return;
+  }
   const url = `${window.location.origin}${window.location.pathname}?join=${state.activeNucleusId}`;
   navigator.clipboard.writeText(url).then(() => {
     showToast('¡Enlace de invitación copiado al portapapeles!');
@@ -1070,15 +1157,7 @@ function copyInviteLink() {
   });
 }
 
-async function handleInviteLink(nucleusId) {
-  if (state.user) {
-    await joinNucleusByInvite(nucleusId, state.user.uid);
-    switchNucleus(nucleusId);
-  } else {
-    showToast('Inicia sesión para unirte al núcleo compartido.');
-    openAuthModal('login');
-  }
-}
+
 
 // ---- Buscador propio (Ctrl+F) ----
 const search = { results: [], index: -1 };
@@ -1338,11 +1417,36 @@ async function handleAuthSubmit(e) {
 
 async function loadUserCloudData() {
   if (!state.user) return;
+  // 1) Si venía de un enlace de invitación, unirse primero
+  let joinedId = null;
+  const pending = getPendingJoin();
+  if (pending) {
+    clearPendingJoin();
+    try {
+      const joinedName = await joinNucleusByInvite(pending, state.user.uid);
+      if (joinedName) {
+        joinedId = pending;
+        showToast(`Te has unido a "${joinedName}"`);
+      } else {
+        showToast('El enlace de invitación no es válido o el núcleo ya no existe.');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('No se pudo usar el enlace de invitación.');
+    }
+  }
+
+  // 2) Cargar los núcleos y elegir cuál abrir
   const nuclei = await getUserNucleiList(state.user.uid);
   if (nuclei && nuclei.length > 0) {
+    const prev = state.activeNucleusId;
+    const pick = nuclei.find((n) => n.id === joinedId)
+      || nuclei.find((n) => n.id === prev)
+      || nuclei[0];
     state.nucleiList = nuclei;
-    state.activeNucleusId = nuclei[0].id;
-    state.activeNucleus = nuclei[0];
+    state.activeNucleusId = pick.id;
+    state.activeNucleus = pick;
+    saveLocalState();
   } else {
     // Primer inicio de sesion: migramos lo que haya en local a un nucleo propio.
     const migratedId = newNucleusId();
@@ -1369,7 +1473,12 @@ function listenToNucleusRealtime(nucleusId) {
   if (state.unsubscribeNucleus) state.unsubscribeNucleus();
 
   state.unsubscribeNucleus = subscribeToNucleusData(nucleusId, (nucleusData, participantsData) => {
-    if (nucleusData) state.activeNucleus = nucleusData;
+    if (nucleusData) {
+      state.activeNucleus = { ...nucleusData, id: nucleusData.id || nucleusId };
+      // mantener la lista del desplegable al día (p. ej. si otro lo renombra)
+      const entry = state.nucleiList.find((n) => n.id === nucleusId);
+      if (entry) { entry.name = nucleusData.name; entry.circles = nucleusData.circles; }
+    }
     if (participantsData) state.participants = participantsData;
     renderCanvas();
     renderParticipantsList();
