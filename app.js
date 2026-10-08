@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610081359';
+} from './firebase-config.js?v=202610081410';
 
 export const state = {
   user: null,
@@ -82,7 +82,8 @@ const dom = {
   detailAge: document.getElementById('detail-age'),
   detailComments: document.getElementById('detail-comments'),
   detailNextSteps: document.getElementById('detail-next-steps'),
-  detailBooks: document.getElementById('detail-books'),
+  detailBooksEditor: document.getElementById('detail-books-editor'),
+  addBooksEditor: document.getElementById('add-books-editor'),
   detailCreatedAt: document.getElementById('detail-created-at'),
   detailUpdatedAt: document.getElementById('detail-updated-at'),
   btnArchiveParticipant: document.getElementById('btn-archive-participant'),
@@ -221,6 +222,7 @@ function initEventListeners() {
   dom.btnCustomizeCircles.addEventListener('click', openCircleCustomizerModal);
   dom.btnSaveCircleSettings.addEventListener('click', saveCircleSettings);
   initSearch();
+  initBooksEditors();
   dom.fontSizeSlider.addEventListener('input', () => {
     // nivel = último punto de control sobrepasado (vista previa en directo)
     setFontSizeUI(Math.floor(parseFloat(dom.fontSizeSlider.value) + 1e-6), false);
@@ -443,8 +445,44 @@ function booksStripHtml(p, cls) {
   }).join('') + '</div>';
 }
 
-function renderDetailBooks(p) {
-  dom.detailBooks.innerHTML = '';
+function isDoing(p, n) {
+  return Array.isArray(p.doing) && p.doing.includes(n);
+}
+
+function bookChipHtml(n, done, extra = '') {
+  const b = BOOKS[n - 1];
+  const style = done ? ` style="--book:${b.color};--book-ink:${b.ink}"` : '';
+  return `<span class="book-chip${done ? ' done' : ''}${extra}"${style}>L${n}</span>`;
+}
+
+// Avisar al menú lateral de que su contenido ha cambiado de alto
+function notifySideMenuResize() {
+  window.dispatchEvent(new Event('resize'));
+}
+
+/*
+ * Editor de libros reutilizable (perfil y formulario de alta):
+ *  - «Libros completados»: 7 casillas que se colorean
+ *  - «Haciendo ahora»: libros elegidos + botón «+» que despliega los 7 libros
+ * getModel() devuelve el objeto con { books, doing }; onChange() se llama tras cada cambio.
+ */
+function createBooksEditor(root, getModel, onChange) {
+  root.innerHTML = `
+    <div class="form-group">
+      <label>Libros completados</label>
+      <div class="books-picker" role="group" aria-label="Libros completados"></div>
+    </div>
+    <div class="form-group">
+      <label>Haciendo ahora</label>
+      <div class="doing-row"></div>
+      <div class="doing-choices hidden" role="group" aria-label="Elige el libro que está haciendo">
+        <span class="doing-choices-label">Elige libro:</span>
+      </div>
+    </div>`;
+  const grid = root.querySelector('.books-picker');
+  const doingRow = root.querySelector('.doing-row');
+  const choices = root.querySelector('.doing-choices');
+
   BOOKS.forEach((b) => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -452,32 +490,119 @@ function renderDetailBooks(p) {
     btn.textContent = `L${b.n}`;
     btn.style.setProperty('--book', b.color);
     btn.style.setProperty('--book-ink', b.ink);
-    const done = hasBook(p, b.n);
-    btn.classList.toggle('done', done);
-    btn.setAttribute('aria-pressed', done ? 'true' : 'false');
-    btn.title = `Libro ${b.n}: ${done ? 'completado' : 'pendiente'}`;
-    btn.addEventListener('click', () => toggleBook(p.id, b.n));
-    dom.detailBooks.appendChild(btn);
+    btn.addEventListener('click', () => {
+      const m = getModel();
+      if (!m) return;
+      const set = new Set(Array.isArray(m.books) ? m.books : []);
+      if (set.has(b.n)) set.delete(b.n); else set.add(b.n);
+      m.books = [...set].sort((x, y) => x - y);
+      update();
+      onChange(m);
+    });
+    grid.appendChild(btn);
+
+    const pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'book-toggle done small';
+    pick.textContent = `L${b.n}`;
+    pick.style.setProperty('--book', b.color);
+    pick.style.setProperty('--book-ink', b.ink);
+    pick.addEventListener('click', () => {
+      const m = getModel();
+      if (!m) return;
+      const set = new Set(Array.isArray(m.doing) ? m.doing : []);
+      set.add(b.n);
+      m.doing = [...set].sort((x, y) => x - y);
+      setChoicesOpen(false);
+      update();
+      onChange(m);
+      const plus = doingRow.querySelector('.doing-add');
+      if (plus) plus.focus();
+    });
+    choices.appendChild(pick);
   });
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'doing-cancel';
+  cancel.textContent = 'Cancelar';
+  cancel.addEventListener('click', () => setChoicesOpen(false));
+  choices.appendChild(cancel);
+
+  function setChoicesOpen(open) {
+    choices.classList.toggle('hidden', !open);
+    const plus = doingRow.querySelector('.doing-add');
+    if (plus) plus.classList.toggle('open', open);
+    notifySideMenuResize();
+  }
+
+  function update() {
+    const m = getModel() || {};
+    grid.querySelectorAll('.book-toggle').forEach((btn, i) => {
+      const done = hasBook(m, BOOKS[i].n);
+      btn.classList.toggle('done', done);
+      btn.setAttribute('aria-pressed', done ? 'true' : 'false');
+      btn.title = `Libro ${BOOKS[i].n}: ${done ? 'completado' : 'pendiente'}`;
+    });
+    // libros que ya está haciendo: no se ofrecen otra vez
+    choices.querySelectorAll('.book-toggle').forEach((btn, i) => {
+      btn.disabled = isDoing(m, BOOKS[i].n);
+    });
+
+    doingRow.innerHTML = '';
+    (Array.isArray(m.doing) ? m.doing : []).forEach((n) => {
+      const b = BOOKS[n - 1];
+      if (!b) return;
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'book-toggle done doing-chip';
+      chip.style.setProperty('--book', b.color);
+      chip.style.setProperty('--book-ink', b.ink);
+      chip.innerHTML = `L${n}<span class="doing-x" aria-hidden="true">×</span>`;
+      chip.title = `Haciendo el libro ${n} · clic para quitar`;
+      chip.addEventListener('click', () => {
+        const mm = getModel();
+        if (!mm) return;
+        mm.doing = (mm.doing || []).filter((x) => x !== n);
+        update();
+        onChange(mm);
+      });
+      doingRow.appendChild(chip);
+    });
+    const allDoing = (m.doing || []).length >= BOOKS.length;
+    if (!allDoing) {
+      const plus = document.createElement('button');
+      plus.type = 'button';
+      plus.className = 'book-toggle doing-add';
+      plus.textContent = '+';
+      plus.title = 'Añadir libro que está haciendo';
+      plus.classList.toggle('open', !choices.classList.contains('hidden'));
+      plus.addEventListener('click', () => setChoicesOpen(choices.classList.contains('hidden')));
+      doingRow.appendChild(plus);
+    } else {
+      setChoicesOpen(false);
+    }
+  }
+
+  update();
+  return { update, close: () => setChoicesOpen(false) };
 }
 
-// Marcar/desmarcar un libro se guarda al momento
-function toggleBook(id, n) {
-  const p = state.participants.find((item) => item.id === id);
-  if (!p) return;
-  const set = new Set(Array.isArray(p.books) ? p.books : []);
-  if (set.has(n)) set.delete(n); else set.add(n);
-  p.books = [...set].sort((a, b) => a - b);
-  p.updatedAt = new Date().toISOString();
-  saveParticipant(p);
-  // actualizar solo el estado de los botones (sin perder el foco)
-  dom.detailBooks.querySelectorAll('.book-toggle').forEach((btn, i) => {
-    const done = hasBook(p, BOOKS[i].n);
-    btn.classList.toggle('done', done);
-    btn.setAttribute('aria-pressed', done ? 'true' : 'false');
-    btn.title = `Libro ${BOOKS[i].n}: ${done ? 'completado' : 'pendiente'}`;
-  });
-  if (popState.id === id) openPersonPop(id);
+let detailBooksEditor = null;
+let addBooksEditor = null;
+let addDraft = { books: [], doing: [] };
+
+function initBooksEditors() {
+  detailBooksEditor = createBooksEditor(
+    dom.detailBooksEditor,
+    () => state.participants.find((p) => p.id === dom.detailId.value),
+    (p) => {
+      // se guarda al momento
+      p.updatedAt = new Date().toISOString();
+      saveParticipant(p);
+      if (popState.id === p.id) openPersonPop(p.id);
+    }
+  );
+  addBooksEditor = createBooksEditor(dom.addBooksEditor, () => addDraft, () => {});
 }
 
 // ---- Ficha rápida de un participante ----
@@ -497,6 +622,10 @@ function openPersonPop(id) {
   const color = circle ? circle.color : '#94a3b8';
   const age = p.age || p.age === 0 ? `<span class="pop-age">${escapeHtml(p.age)}</span>` : '';
   const obs = p.comments ? `<div class="pop-obs">${escapeHtml(p.comments)}</div>` : '';
+  const doingList = Array.isArray(p.doing) ? p.doing.filter((n) => BOOKS[n - 1]) : [];
+  const doing = doingList.length
+    ? `<span class="pop-doing"><span class="pop-doing-label">haciendo:</span>${doingList.map((n) => bookChipHtml(n, true)).join('')}</span>`
+    : '';
   const steps = p.nextSteps
     ? `<div class="pop-steps">${escapeHtml(p.nextSteps)}</div>`
     : `<div class="pop-steps empty">Sin próximos pasos todavía</div>`;
@@ -504,7 +633,7 @@ function openPersonPop(id) {
   dom.personPop.innerHTML = `
     <div class="pop-head">
       <span class="pop-dot"></span>
-      <span class="pop-name">${escapeHtml(p.name)}</span>${age}
+      <span class="pop-name">${escapeHtml(p.name)}</span>${age}${doing}
     </div>
     ${obs}
     ${booksStripHtml(p, 'pop-books')}
@@ -844,6 +973,8 @@ function handleAddParticipant(e) {
     age,
     comments,
     nextSteps,
+    books: [...addDraft.books],
+    doing: [...addDraft.doing],
     normX,
     normY,
     circleIndex: -1,
@@ -860,6 +991,8 @@ function handleAddParticipant(e) {
   dom.inputAge.value = '';
   dom.inputComments.value = '';
   dom.inputNextSteps.value = '';
+  addDraft = { books: [], doing: [] };
+  if (addBooksEditor) { addBooksEditor.close(); addBooksEditor.update(); }
 
   renderCanvas();
   renderParticipantsList();
@@ -1010,7 +1143,7 @@ function openParticipantDetail(id) {
   dom.detailAge.value = p.age || '';
   dom.detailComments.value = p.comments || '';
   dom.detailNextSteps.value = p.nextSteps || '';
-  renderDetailBooks(p);
+  if (detailBooksEditor) { detailBooksEditor.close(); detailBooksEditor.update(); }
 
   const circle = state.activeNucleus.circles[p.circleIndex];
   dom.detailCircleName.textContent = circle ? circle.name : 'Exterior / Sin asignar';

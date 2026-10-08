@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Círculos Concéntricos - Gestión de Participantes</title>
-  <link rel="stylesheet" href="style.css?v=202610081359" />
+  <link rel="stylesheet" href="style.css?v=202610081410" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -145,6 +145,7 @@
                   <input type="text" id="input-comments" placeholder="Observaciones" />
                 </div>
               </div>
+              <div id="add-books-editor" class="books-editor compact"></div>
               <div class="form-group">
                 <div class="comments-row">
                   <textarea id="input-next-steps" rows="2" placeholder="Próximos pasos con esta persona..."></textarea>
@@ -219,10 +220,7 @@
                 <input type="text" id="detail-comments" placeholder="p. ej. hermano de…" />
               </div>
             </div>
-            <div class="form-group">
-              <label>Libros completados</label>
-              <div id="detail-books" class="books-picker" role="group" aria-label="Libros completados"></div>
-            </div>
+            <div id="detail-books-editor" class="books-editor"></div>
             <div class="form-group">
               <label for="detail-next-steps">Próximos pasos</label>
               <textarea id="detail-next-steps" rows="5" placeholder="Qué queremos hacer con esta persona las próximas semanas..."></textarea>
@@ -329,7 +327,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="app.js?v=202610081359"></script>
+  <script type="module" src="app.js?v=202610081410"></script>
   <script>
   (function () {
     const menu = document.getElementById('side-menu');
