@@ -1,0 +1,16 @@
+{
+  "name": "Círculos Concéntricos",
+  "short_name": "Círculos",
+  "description": "Organiza a los participantes en círculos según su cercanía.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0B0D10",
+  "theme_color": "#0B0D10",
+  "icons": [
+    { "src": "logo-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "logo-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "logo-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
