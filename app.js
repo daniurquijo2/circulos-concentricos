@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610081416';
+} from './firebase-config.js?v=202610081419';
 
 export const state = {
   user: null,
@@ -31,7 +31,7 @@ export const state = {
   ],
   participants: [],
   selectedParticipantId: null,
-  sidebarOpen: true,
+  sidebarOpen: false,
   groupByCircle: true,
   currentSort: 'custom',
   authMode: 'login',
@@ -1270,11 +1270,13 @@ function isDetailOpen() {
   return !dom.sideViewDetail.classList.contains('hidden');
 }
 
-// Intro (en el perfil): guardar y volver
+// Intro (en el perfil): guardar y cerrar el menú
 function handleSaveParticipantDetail(e) {
   e.preventDefault();
   flushDetailAutosave();
+  if (document.activeElement) document.activeElement.blur();
   showSideView('main');
+  if (!dom.sideMenu.classList.contains('collapsed')) toggleSidebar();
 }
 
 function handleToggleArchive() {

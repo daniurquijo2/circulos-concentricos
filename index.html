@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Círculos Concéntricos - Gestión de Participantes</title>
-  <link rel="stylesheet" href="style.css?v=202610081416" />
+  <link rel="stylesheet" href="style.css?v=202610081419" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -120,7 +120,7 @@
       </section>
 
       <!-- MENÚ LATERAL FLOTANTE -->
-      <aside id="side-menu" class="side-menu">
+      <aside id="side-menu" class="side-menu collapsed">
         <button id="btn-panel-hide" class="btn-panel-hide" title="Ocultar panel">
           <svg viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
@@ -327,7 +327,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="app.js?v=202610081416"></script>
+  <script type="module" src="app.js?v=202610081419"></script>
   <script>
   (function () {
     const menu = document.getElementById('side-menu');
@@ -339,7 +339,7 @@
     };
     let current = 'main';
     let returnTo = 'main';
-    let open = true;
+    let open = !menu.classList.contains('collapsed');
 
     let measuring = false;
     function measure(el) {
