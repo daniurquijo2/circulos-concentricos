@@ -550,52 +550,107 @@ function renderCanvas() {
   applyViewBox();
 }
 
+// Convierte un punto de pantalla a coordenadas del lienzo
+function screenToWorld(clientX, clientY) {
+  const rect = dom.svgCanvas.getBoundingClientRect();
+  const k = pxPerUnit();
+  return { x: view.x + (clientX - rect.left) / k, y: view.y + (clientY - rect.top) / k };
+}
+
+// Zona visible útil del lienzo (sin la parte que tapa el menú lateral)
+function visibleCanvasBounds() {
+  const box = dom.canvasContainer.getBoundingClientRect();
+  let right = box.right;
+  if (dom.sideMenu && !dom.sideMenu.classList.contains('collapsed')) {
+    const menuLeft = dom.sideMenu.getBoundingClientRect().left;
+    if (menuLeft - box.left > 240) right = menuLeft;
+  }
+  return { left: box.left, top: box.top, right, bottom: box.bottom };
+}
+
+// Autodesplazamiento al llevar una ficha al borde
+const EDGE_ZONE = 70;        // px desde el borde en los que empieza a moverse
+const EDGE_MIN_SPEED = 180;  // px de pantalla por segundo al entrar en la zona
+const EDGE_MAX_SPEED = 650;  // px de pantalla por segundo pegado al borde
+
+function edgeSpeed(dist) {
+  // dist: px que faltan hasta el borde (negativo si el cursor ya lo ha pasado)
+  if (dist >= EDGE_ZONE) return 0;
+  const t = Math.min(1, Math.max(0, 1 - dist / EDGE_ZONE));
+  return EDGE_MIN_SPEED + (EDGE_MAX_SPEED - EDGE_MIN_SPEED) * t * t;
+}
+
 function makeDraggable(element, participant, centerX, centerY, maxRadius) {
   let isDragging = false;
   let startX, startY;
-  let currentNormX = participant.normX || 0;
-  let currentNormY = participant.normY || 0;
+  let lastX, lastY;
+  let grabDX = 0, grabDY = 0;   // desfase entre el cursor y el centro de la ficha (lienzo)
+  let newNormX = participant.normX || 0;
+  let newNormY = participant.normY || 0;
+  let raf = null;
+  let lastT = 0;
+
+  const placeAtCursor = () => {
+    const w = screenToWorld(lastX, lastY);
+    newNormX = (w.x + grabDX - centerX) / maxRadius;
+    newNormY = (w.y + grabDY - centerY) / maxRadius;
+    element.setAttribute('transform', `translate(${centerX + newNormX * maxRadius}, ${centerY + newNormY * maxRadius})`);
+    highlightCircleRing(Math.sqrt(newNormX * newNormX + newNormY * newNormY));
+  };
+
+  const tick = (t) => {
+    if (!isDragging) { raf = null; return; }
+    const dt = lastT ? Math.min(0.05, (t - lastT) / 1000) : 0;
+    lastT = t;
+    if (element.dataset.dragged === 'true' && dt > 0) {
+      const b = visibleCanvasBounds();
+      const vx = edgeSpeed(b.right - lastX) - edgeSpeed(lastX - b.left);
+      const vy = edgeSpeed(b.bottom - lastY) - edgeSpeed(lastY - b.top);
+      if (vx || vy) {
+        const k = pxPerUnit();
+        const ox = view.x, oy = view.y;
+        view.x += (vx * dt) / k;
+        view.y += (vy * dt) / k;
+        applyViewBox();
+        if (view.x !== ox || view.y !== oy) placeAtCursor();
+      }
+    }
+    raf = requestAnimationFrame(tick);
+  };
 
   const onPointerDown = (e) => {
+    if (e.button !== 0) return;
     isDragging = true;
     element.dataset.dragged = 'false';
     element.classList.add('dragging');
-    startX = e.clientX;
-    startY = e.clientY;
+    startX = lastX = e.clientX;
+    startY = lastY = e.clientY;
+    const w = screenToWorld(e.clientX, e.clientY);
+    grabDX = centerX + (participant.normX || 0) * maxRadius - w.x;
+    grabDY = centerY + (participant.normY || 0) * maxRadius - w.y;
     element.setPointerCapture(e.pointerId);
 
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
+    lastT = 0;
+    if (!raf) raf = requestAnimationFrame(tick);
   };
 
   const onPointerMove = (e) => {
     if (!isDragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) element.dataset.dragged = 'true';
-
-    const k = maxRadius * pxPerUnit();
-    const newNormX = currentNormX + dx / k;
-    const newNormY = currentNormY + dy / k;
-
-    const px = centerX + newNormX * maxRadius;
-    const py = centerY + newNormY * maxRadius;
-    element.setAttribute('transform', `translate(${px}, ${py})`);
-
-    const dist = Math.sqrt(newNormX * newNormX + newNormY * newNormY);
-    highlightCircleRing(dist);
+    lastX = e.clientX;
+    lastY = e.clientY;
+    if (Math.abs(lastX - startX) > 3 || Math.abs(lastY - startY) > 3) element.dataset.dragged = 'true';
+    if (element.dataset.dragged === 'true') placeAtCursor();
   };
 
-  const onPointerUp = (e) => {
+  const onPointerUp = () => {
     if (!isDragging) return;
     isDragging = false;
     element.classList.remove('dragging');
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
-
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
 
     // sin movimiento: es un clic → mostrar/ocultar la ficha rápida
     if (element.dataset.dragged !== 'true') {
@@ -605,12 +660,11 @@ function makeDraggable(element, participant, centerX, centerY, maxRadius) {
       return;
     }
 
-    const k = maxRadius * pxPerUnit();
-    participant.normX = currentNormX + dx / k;
-    participant.normY = currentNormY + dy / k;
+    participant.normX = newNormX;
+    participant.normY = newNormY;
     participant.updatedAt = new Date().toISOString();
 
-    const distance = Math.sqrt(participant.normX * participant.normX + participant.normY * participant.normY);
+    const distance = Math.sqrt(newNormX * newNormX + newNormY * newNormY);
     participant.circleIndex = calculateCircleFromDistance(distance);
 
     saveParticipant(participant);
