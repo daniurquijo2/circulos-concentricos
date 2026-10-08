@@ -51,6 +51,7 @@ const dom = {
   sideMenu: document.getElementById('side-menu'),
   canvasContainer: document.getElementById('canvas-container'),
   svgCanvas: document.getElementById('circles-canvas'),
+  personPop: document.getElementById('person-pop'),
   circlesLayer: document.getElementById('circles-layer'),
   participantsLayer: document.getElementById('participants-layer'),
   formAddParticipant: document.getElementById('form-add-participant'),
@@ -274,6 +275,7 @@ function applyViewBox() {
   dom.svgCanvas.setAttribute('viewBox', `${view.x} ${view.y} ${vw} ${vh}`);
   dom.canvasContainer.dataset.zoomed = view.zoom > 1.01 ? 'true' : 'false';
   updateCircleTitles();
+  positionPersonPop();
 }
 
 function zoomAt(clientX, clientY, factor) {
@@ -299,12 +301,126 @@ function initCanvasZoom() {
     zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.002));
   }, { passive: false });
 
+  // arrastrar el fondo para moverse por los círculos (clic simple: cerrar ficha)
+  let pan = null;
+  dom.canvasContainer.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.participant-node') || e.target.closest('.person-pop')) return;
+    pan = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false, id: e.pointerId };
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!pan || e.pointerId !== pan.id) return;
+    const dx = e.clientX - pan.x;
+    const dy = e.clientY - pan.y;
+    if (!pan.moved && Math.hypot(dx, dy) < 4) return;
+    if (!pan.moved) {
+      pan.moved = true;
+      dom.canvasContainer.classList.add('panning');
+    }
+    const k = pxPerUnit();
+    view.x = pan.vx - dx / k;
+    view.y = pan.vy - dy / k;
+    applyViewBox();
+  });
+  const endPan = (e) => {
+    if (!pan || e.pointerId !== pan.id) return;
+    if (!pan.moved) closePersonPop();
+    dom.canvasContainer.classList.remove('panning');
+    pan = null;
+  };
+  window.addEventListener('pointerup', endPan);
+  window.addEventListener('pointercancel', endPan);
+
+  // ficha rápida: clic abre el perfil en el menú lateral
+  dom.personPop.addEventListener('click', () => {
+    const id = popState.id;
+    closePersonPop();
+    if (id) openParticipantDetail(id);
+  });
+  dom.personPop.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dom.personPop.click(); }
+  });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePersonPop(); });
+  // clic fuera del lienzo (menú, cabecera...) también la cierra
+  document.addEventListener('pointerdown', (e) => {
+    if (popState.id && !dom.canvasContainer.contains(e.target)) closePersonPop();
+  });
+
   // doble clic en el fondo: volver a la vista completa
   dom.canvasContainer.addEventListener('dblclick', (e) => {
     if (e.target.closest('.participant-node')) return;
     view.zoom = 1; view.x = 0; view.y = 0;
     applyViewBox();
   });
+}
+
+// ---- Ficha rápida de un participante ----
+const popState = { id: null };
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function openPersonPop(id) {
+  const p = state.participants.find((item) => item.id === id);
+  if (!p) return;
+  popState.id = id;
+  const circle = state.activeNucleus.circles[p.circleIndex];
+  const color = circle ? circle.color : '#94a3b8';
+  const age = p.age || p.age === 0 ? `<span class="pop-age">${escapeHtml(p.age)}</span>` : '';
+  const obs = p.comments ? `<div class="pop-obs">${escapeHtml(p.comments)}</div>` : '';
+  const steps = p.nextSteps
+    ? `<div class="pop-steps">${escapeHtml(p.nextSteps)}</div>`
+    : `<div class="pop-steps empty">Sin próximos pasos todavía</div>`;
+  dom.personPop.style.setProperty('--pop-color', color);
+  dom.personPop.innerHTML = `
+    <div class="pop-head">
+      <span class="pop-dot"></span>
+      <span class="pop-name">${escapeHtml(p.name)}</span>${age}
+    </div>
+    ${obs}
+    <div class="pop-label">Próximos pasos</div>
+    ${steps}
+    <div class="pop-foot">Abrir perfil →</div>`;
+  dom.personPop.classList.remove('hidden', 'show');
+  positionPersonPop();
+  requestAnimationFrame(() => dom.personPop.classList.add('show'));
+}
+
+function closePersonPop() {
+  popState.id = null;
+  if (dom.personPop) dom.personPop.classList.add('hidden');
+}
+
+function positionPersonPop() {
+  if (!popState.id || !dom.personPop) return;
+  const node = dom.participantsLayer.querySelector(`[data-id="${popState.id}"]`);
+  if (!node) { closePersonPop(); return; }
+  const box = dom.canvasContainer.getBoundingClientRect();
+  const r = node.getBoundingClientRect();
+  const pop = dom.personPop;
+  const pw = pop.offsetWidth;
+  const ph = pop.offsetHeight;
+  const gap = 14;
+  // límite derecho: no meterse debajo del menú lateral si está abierto
+  const menuOpen = dom.sideMenu && !dom.sideMenu.classList.contains('collapsed');
+  const rightLimit = menuOpen ? dom.sideMenu.getBoundingClientRect().left - box.left - 12 : box.width - 12;
+
+  let left = r.right - box.left + gap;
+  let side = 'right';
+  if (left + pw > rightLimit) {
+    left = r.left - box.left - gap - pw;
+    side = 'left';
+  }
+  left = Math.max(12, left);
+  const cy = r.top - box.top + r.height / 2;
+  const top = Math.min(Math.max(12, cy - ph / 2), box.height - ph - 12);
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+  pop.style.setProperty('--arrow-y', Math.min(Math.max(14, cy - top), ph - 14) + 'px');
+  pop.dataset.side = side;
 }
 
 let canvasObserver = null;
@@ -427,10 +543,6 @@ function renderCanvas() {
 
     makeDraggable(g, p, centerX, centerY, maxRadius);
 
-    g.addEventListener('click', () => {
-      if (g.dataset.dragged === 'true') return;
-      openParticipantDetail(p.id);
-    });
 
     dom.participantsLayer.appendChild(g);
   });
@@ -484,6 +596,14 @@ function makeDraggable(element, participant, centerX, centerY, maxRadius) {
 
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
+
+    // sin movimiento: es un clic → mostrar/ocultar la ficha rápida
+    if (element.dataset.dragged !== 'true') {
+      dom.circlesLayer.querySelectorAll('.hover-active').forEach((el) => el.classList.remove('hover-active'));
+      if (popState.id === participant.id) closePersonPop();
+      else openPersonPop(participant.id);
+      return;
+    }
 
     const k = maxRadius * pxPerUnit();
     participant.normX = currentNormX + dx / k;
