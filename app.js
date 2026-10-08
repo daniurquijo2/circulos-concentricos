@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610081952';
+} from './firebase-config.js?v=202610082001';
 
 export const state = {
   user: null,
@@ -234,6 +234,7 @@ function initEventListeners() {
     btn.addEventListener('click', () => { fontPreviewLevel = null; renderCanvas(); });
   });
   dom.btnShowList.addEventListener('click', toggleListView);
+  initKeyboardShortcuts();
   // Formulario de alta: Intro añade (Mayús+Intro = salto de línea en el texto largo)
   dom.formAddParticipant.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.isComposing) return;
@@ -1217,6 +1218,71 @@ function showSideView(view) {
     dom.sideViewDetail.classList.add('hidden');
     dom.sideViewMain.classList.remove('hidden');
   }
+}
+
+// ---- Atajos de teclado ----
+function isTypingTarget(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag === 'INPUT') {
+    const type = (el.type || 'text').toLowerCase();
+    return !['checkbox', 'radio', 'button', 'submit', 'range', 'color'].includes(type);
+  }
+  return false;
+}
+
+function anyModalOpen() {
+  return [...document.querySelectorAll('.modal-overlay')].some((m) => !m.classList.contains('hidden'));
+}
+
+// Abre el menú en «Añadir participante» con el cursor en «Nombre»
+function openAddParticipantMenu() {
+  const sm = window.__sideMenu;
+  if (!sm) return;
+  if (isDetailOpen()) {
+    flushDetailAutosave();
+    showSideView('main');
+  }
+  closePersonPop();
+  sm.setView('main');
+  if (dom.sideMenu.classList.contains('collapsed')) sm.setOpen(true);
+  setTimeout(() => dom.inputName.focus({ preventScroll: true }), 60);
+}
+
+// Cierra todo lo que esté abierto (guardando lo que haya en el menú lateral)
+function closeEverything() {
+  document.querySelectorAll('.modal-overlay:not(.hidden)').forEach((m) => {
+    const closeBtn = m.querySelector('[data-close-modal]');
+    if (closeBtn) closeBtn.click(); else m.classList.add('hidden');
+  });
+  dom.nucleusDropdown.classList.add('hidden');
+  if (!dom.searchBox.classList.contains('hidden')) closeSearch();
+  closePersonPop();
+  if (!dom.sideMenu.classList.contains('collapsed')) closeSideMenuSaving();
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+}
+
+function initKeyboardShortcuts() {
+  window.addEventListener('keydown', (e) => {
+    if (e.isComposing || e.repeat) return;
+    const key = e.key.toLowerCase();
+
+    // Ctrl+Z: cerrar todos los menús abiertos
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && key === 'z') {
+      e.preventDefault();
+      closeEverything();
+      return;
+    }
+
+    // N (fuera de los campos de texto): nuevo participante
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && key === 'n') {
+      if (isTypingTarget(document.activeElement) || anyModalOpen()) return;
+      e.preventDefault();
+      openAddParticipantMenu();
+    }
+  });
 }
 
 // ---- Abrir/cerrar el menú lateral ----
