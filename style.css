@@ -622,6 +622,7 @@ a:hover { color: #F5CE9E; }
   color: #8B95A3;
 }
 .required { color: var(--danger); }
+.field-hint { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; color: var(--text-faint); }
 .form-row { display: flex; gap: 12px; }
 .flex-1 { flex: 1; min-width: 0; }
 .age-field { flex: none; width: 84px; }

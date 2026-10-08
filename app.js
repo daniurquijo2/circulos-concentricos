@@ -208,6 +208,14 @@ function initEventListeners() {
 
   dom.btnBackToList.addEventListener('click', () => showSideView('main'));
   dom.formEditParticipant.addEventListener('submit', handleSaveParticipantDetail);
+  // Intro guarda; Mayús+Intro hace salto de línea en los textos largos
+  dom.formEditParticipant.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    if (e.target.tagName === 'TEXTAREA' && e.shiftKey) return;
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    dom.formEditParticipant.requestSubmit();
+  });
   dom.btnArchiveParticipant.addEventListener('click', handleToggleArchive);
   dom.btnDeleteParticipant.addEventListener('click', handleDeleteParticipant);
 
@@ -918,7 +926,11 @@ function showSideView(view) {
   if (view === 'detail') {
     dom.sideViewMain.classList.add('hidden');
     dom.sideViewDetail.classList.remove('hidden');
-    if (!state.sidebarOpen) toggleSidebar();
+    // abrir el menú lateral si estaba plegado (el estado real es la clase)
+    if (dom.sideMenu.classList.contains('collapsed')) {
+      state.sidebarOpen = false;
+      toggleSidebar();
+    }
   } else {
     dom.sideViewDetail.classList.add('hidden');
     dom.sideViewMain.classList.remove('hidden');
