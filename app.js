@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610082014';
+} from './firebase-config.js?v=202610151833';
 
 export const state = {
   user: null,
@@ -384,11 +384,34 @@ function zoomAt(clientX, clientY, factor) {
 }
 
 function initCanvasZoom() {
+  // Rueda del ratón y pellizco con dos dedos en el panel táctil.
+  // El navegador envía el pellizco como «rueda + Ctrl» con pasos pequeños,
+  // así que se amplifica para que vaya a un ritmo parecido a la rueda.
   dom.canvasContainer.addEventListener('wheel', (e) => {
-    if (e.ctrlKey) return;
     e.preventDefault();
-    zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.002));
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    const dy = e.deltaY * unit;
+    const speed = e.ctrlKey ? 0.012 : 0.002;
+    zoomAt(e.clientX, e.clientY, Math.exp(-dy * speed));
   }, { passive: false });
+
+  // Fuera del lienzo (menús, cabecera…), el pellizco no debe ampliar toda la página
+  window.addEventListener('wheel', (e) => {
+    if (e.ctrlKey && !dom.canvasContainer.contains(e.target)) e.preventDefault();
+  }, { passive: false });
+
+  // Safari (Mac) usa sus propios eventos de gesto para el pellizco
+  let gestureScale = 1;
+  const onGesture = (e) => {
+    e.preventDefault();
+    if (e.type === 'gesturestart') { gestureScale = 1; return; }
+    if (!dom.canvasContainer.contains(e.target)) return;
+    const factor = e.scale / gestureScale;
+    gestureScale = e.scale;
+    zoomAt(e.clientX, e.clientY, factor);
+  };
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((t) =>
+    window.addEventListener(t, onGesture, { passive: false }));
 
   // arrastrar el fondo para moverse por los círculos (clic simple: cerrar ficha)
   let pan = null;
