@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610172025';
+} from './firebase-config.js?v=202610172247';
 
 export const state = {
   user: null,
@@ -826,6 +826,15 @@ function renderCanvas() {
   // 1. Círculos
   dom.circlesLayer.innerHTML = '';
   const circles = [...state.activeNucleus.circles].reverse();
+
+  // Base sólida bajo los anillos (color «fondo de los círculos»)
+  const maxRatio = Math.max(...state.activeNucleus.circles.map(c => c.ratio));
+  const baseEl = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  baseEl.setAttribute('cx', centerX);
+  baseEl.setAttribute('cy', centerY);
+  baseEl.setAttribute('r', maxRadius * maxRatio);
+  baseEl.setAttribute('class', 'circles-base');
+  dom.circlesLayer.appendChild(baseEl);
 
   circles.forEach((circle) => {
     const r = maxRadius * circle.ratio;
@@ -2039,13 +2048,13 @@ function openCircleCustomizerModal() {
   dom.circleCustomizersContainer.innerHTML = '';
   state.activeNucleus.circles.forEach((circle, idx) => {
     const row = document.createElement('div');
-    row.className = 'circle-custom-row';
+    row.className = 'cz-circle-row';
     row.innerHTML = `
-      <input type="color" id="circle-color-${idx}" value="${circle.color}" />
-      <div class="form-group flex-1">
-        <label>Nombre del nivel ${idx + 1}</label>
-        <input type="text" id="circle-name-${idx}" value="${circle.name}" required />
-      </div>
+      <span class="cz-color-field">
+        <button type="button" class="cz-chip" style="--sw: ${circle.color}" title="Cambiar color" aria-label="Color del nivel ${idx + 1}"></button>
+        <input type="color" id="circle-color-${idx}" value="${circle.color}" hidden />
+      </span>
+      <input type="text" class="cz-name" id="circle-name-${idx}" value="${escapeHtml(circle.name)}" placeholder="Círculo ${idx + 1}" aria-label="Nombre del nivel ${idx + 1}" required />
     `;
     dom.circleCustomizersContainer.appendChild(row);
   });

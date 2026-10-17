@@ -9,7 +9,23 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#0B0D10" />
-  <link rel="stylesheet" href="style.css?v=202610172025" />
+  <script>
+    (function () {
+      var t; try { t = localStorage.getItem('circulos_theme'); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      var bg; try { bg = localStorage.getItem('circulos_canvas_bg_' + t); } catch (e) {}
+      if (bg && /^#[0-9a-f]{6}$/i.test(bg)) document.documentElement.style.setProperty('--canvas-bg', bg);
+      var cbg; try { cbg = localStorage.getItem('circulos_circles_bg_' + t); } catch (e) {}
+      if (cbg && /^#[0-9a-f]{6}$/i.test(cbg)) document.documentElement.style.setProperty('--circles-bg', cbg);
+      [['ring_opacity', '--ring-opacity'], ['glow', '--glow-strength'], ['grid', '--grid-strength']].forEach(function (p) {
+        var v = null;
+        try { v = localStorage.getItem('circulos_' + p[0] + '_' + t); if (v === null) v = localStorage.getItem('circulos_' + p[0]); } catch (e) {}
+        if (v !== null && v !== undefined && v !== '' && !isNaN(+v)) document.documentElement.style.setProperty(p[1], Math.min(100, Math.max(0, +v)) / 100);
+      });
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css?v=202610172247" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -22,9 +38,9 @@
       <div class="top-bar-left">
       <div class="brand">
         <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <circle cx="24" cy="24" r="20" stroke="#6B7684" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="0 6.283"/>
-          <circle cx="24" cy="24" r="13" stroke="#E6E9EE" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="0 6.807"/>
-          <circle cx="24" cy="24" r="5.2" fill="#E8B37A"/>
+          <circle cx="24" cy="24" r="20" style="stroke: var(--logo-mid)" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="0 6.283"/>
+          <circle cx="24" cy="24" r="13" style="stroke: var(--logo-strong)" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="0 6.807"/>
+          <circle cx="24" cy="24" r="5.2" style="fill: var(--logo-core)"/>
         </svg>
         <span class="brand-name">Círculos</span>
       </div>
@@ -71,33 +87,6 @@
           </svg>
           Buscar
         </button>
-        <div class="options-container">
-          <button id="btn-options" class="icon-text-btn" title="Opciones" aria-haspopup="menu" aria-expanded="false">
-            <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon">
-              <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.53 1.53 0 01-2.29.95c-1.37-.84-2.94.73-2.1 2.1.54.88.07 2.03-.95 2.28-1.56.38-1.56 2.6 0 2.98a1.53 1.53 0 01.95 2.29c-.84 1.37.73 2.94 2.1 2.1a1.53 1.53 0 012.28.95c.38 1.56 2.6 1.56 2.98 0a1.53 1.53 0 012.29-.95c1.37.84 2.94-.73 2.1-2.1a1.53 1.53 0 01.95-2.28c1.56-.38 1.56-2.6 0-2.98a1.53 1.53 0 01-.95-2.29c.84-1.37-.73-2.94-2.1-2.1a1.53 1.53 0 01-2.28-.95zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
-            </svg>
-            Opciones
-          </button>
-          <div id="options-dropdown" class="dropdown-menu options-dropdown hidden" role="menu">
-            <div class="dropdown-header">Cuenta</div>
-            <div id="user-email-display" class="options-email"></div>
-            <button id="btn-auth-action" class="dropdown-action-btn" role="menuitem">
-              <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h7a1 1 0 110 2H5v10h6a1 1 0 110 2H4a1 1 0 01-1-1V4zm10.3 2.3a1 1 0 011.4 0l3 3a1 1 0 010 1.4l-3 3a1 1 0 01-1.4-1.4L14.58 11H8a1 1 0 110-2h6.58l-1.3-1.3a1 1 0 010-1.4z" clip-rule="evenodd"/></svg>
-              <span id="auth-action-label">Iniciar sesión</span>
-            </button>
-            <div class="dropdown-divider"></div>
-            <button id="btn-customize-circles" class="dropdown-action-btn" role="menuitem">
-              <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon"><path d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2H4zm1 2h10a1 1 0 011 1v2H4V5a1 1 0 011-1zm11 5v7a1 1 0 01-1 1H5a1 1 0 01-1-1V9h12z"/></svg>
-              Personalizar
-              <kbd class="menu-kbd">P</kbd>
-            </button>
-            <button id="btn-show-shortcuts" class="dropdown-action-btn" role="menuitem">
-              <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon"><path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3 1a1 1 0 000 2h1a1 1 0 000-2H5zm4 0a1 1 0 000 2h1a1 1 0 000-2H9zm4 0a1 1 0 100 2h2a1 1 0 100-2h-2zM5 10a1 1 0 100 2h2a1 1 0 100-2H5zm5 0a1 1 0 100 2h1a1 1 0 100-2h-1zm4 0a1 1 0 100 2h1a1 1 0 100-2h-1zm-8 3a1 1 0 100 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/></svg>
-              Atajos de teclado
-            </button>
-          </div>
-        </div>
-
         <button id="btn-show-list" class="icon-text-btn" title="Ver todos los participantes">
           <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon">
             <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm1 4a1 1 0 100 2h12a1 1 0 100-2H4z" clip-rule="evenodd"/>
@@ -139,6 +128,33 @@
         </div>
         <div id="person-pop" class="person-pop hidden" role="button" tabindex="0" title="Abrir perfil"></div>
       </section>
+
+      <div class="options-container options-corner">
+        <button id="btn-options" class="btn-gear" title="Opciones" aria-label="Opciones" aria-haspopup="menu" aria-expanded="false">
+          <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon">
+            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.53 1.53 0 01-2.29.95c-1.37-.84-2.94.73-2.1 2.1.54.88.07 2.03-.95 2.28-1.56.38-1.56 2.6 0 2.98a1.53 1.53 0 01.95 2.29c-.84 1.37.73 2.94 2.1 2.1a1.53 1.53 0 012.28.95c.38 1.56 2.6 1.56 2.98 0a1.53 1.53 0 012.29-.95c1.37.84 2.94-.73 2.1-2.1a1.53 1.53 0 01.95-2.28c1.56-.38 1.56-2.6 0-2.98a1.53 1.53 0 01-.95-2.29c.84-1.37-.73-2.94-2.1-2.1a1.53 1.53 0 01-2.28-.95zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+        <div id="options-dropdown" class="dropdown-menu options-dropdown hidden" role="menu">
+          <div class="dropdown-header">Cuenta</div>
+          <div id="user-email-display" class="options-email"></div>
+          <button id="btn-auth-action" class="dropdown-action-btn" role="menuitem">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h7a1 1 0 110 2H5v10h6a1 1 0 110 2H4a1 1 0 01-1-1V4zm10.3 2.3a1 1 0 011.4 0l3 3a1 1 0 010 1.4l-3 3a1 1 0 01-1.4-1.4L14.58 11H8a1 1 0 110-2h6.58l-1.3-1.3a1 1 0 010-1.4z" clip-rule="evenodd"/></svg>
+            <span id="auth-action-label">Iniciar sesión</span>
+          </button>
+          <div class="dropdown-divider"></div>
+          <button id="btn-customize-circles" class="dropdown-action-btn" role="menuitem">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon"><path d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2H4zm1 2h10a1 1 0 011 1v2H4V5a1 1 0 011-1zm11 5v7a1 1 0 01-1 1H5a1 1 0 01-1-1V9h12z"/></svg>
+            Personalizar
+            <kbd class="menu-kbd">P</kbd>
+          </button>
+          <button id="btn-show-shortcuts" class="dropdown-action-btn" role="menuitem">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon"><path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3 1a1 1 0 000 2h1a1 1 0 000-2H5zm4 0a1 1 0 000 2h1a1 1 0 000-2H9zm4 0a1 1 0 100 2h2a1 1 0 100-2h-2zM5 10a1 1 0 100 2h2a1 1 0 100-2H5zm5 0a1 1 0 100 2h1a1 1 0 100-2h-1zm4 0a1 1 0 100 2h1a1 1 0 100-2h-1zm-8 3a1 1 0 100 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/></svg>
+            Atajos de teclado
+          </button>
+        </div>
+      </div>
+
 
       <!-- MENÚ LATERAL FLOTANTE -->
       <aside id="side-menu" class="side-menu collapsed">
@@ -276,27 +292,112 @@
     </div>
 
     <div id="modal-customize-circles" class="modal-overlay hidden">
-      <div class="modal-card wide-modal">
-        <h3>Personalizar Círculos Concéntricos</h3>
-        <p>Modifica el nombre y el color de cada nivel concéntrico:</p>
-        <div id="circle-customizers-container" class="circle-customizers"></div>
-        <div class="font-size-setting">
-          <div class="font-size-head">
-            <label for="font-size-slider">Tamaño de los nombres</label>
-            <span id="font-size-value" class="font-size-value">Nivel 1</span>
+      <div class="modal-card cz-modal" role="dialog" aria-labelledby="cz-title">
+        <header class="cz-head">
+          <h3 id="cz-title">Personalizar</h3>
+          <div class="cz-actions">
+            <button type="button" id="cz-undo" class="cz-icon-btn" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled>
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 5.5L4 9l3.5 3.5"/><path d="M4.5 9H12a4 4 0 010 8h-1.5"/></svg>
+            </button>
+            <button type="button" id="cz-redo" class="cz-icon-btn" title="Rehacer (Ctrl+Mayús+Z)" aria-label="Rehacer" disabled>
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 5.5L16 9l-3.5 3.5"/><path d="M15.5 9H8a4 4 0 000 8h1.5"/></svg>
+            </button>
+            <span class="cz-divider"></span>
+            <button type="button" id="cz-close" class="cz-icon-btn" title="Cerrar (Esc)" aria-label="Cerrar">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+            </button>
           </div>
-          <div class="font-size-control">
-            <span class="fs-letter small">A</span>
-            <div class="fs-slider-wrap">
-              <div class="fs-ticks" aria-hidden="true">
-                <span data-level="0"></span><span data-level="1"></span><span data-level="2"></span><span data-level="3"></span><span data-level="4"></span>
-              </div>
-              <input type="range" id="font-size-slider" class="fs-slider" min="0" max="4" step="0.01" value="0" />
+        </header>
+
+        <div class="cz-modes" role="tablist" aria-label="Modo">
+          <button type="button" class="cz-mode" data-mode="dark" role="tab" aria-selected="false">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M17.29 13.29A8 8 0 016.71 2.71a8 8 0 1010.58 10.58z"/></svg>
+            Modo oscuro
+          </button>
+          <button type="button" class="cz-mode" data-mode="light" role="tab" aria-selected="false">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.46 4.95l.7.7a1 1 0 001.42-1.4l-.71-.71a1 1 0 00-1.41 1.41zm2.12-10.6a1 1 0 010 1.41l-.7.7a1 1 0 11-1.42-1.4l.71-.71a1 1 0 011.41 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.46a1 1 0 001.41-1.41l-.7-.71a1 1 0 00-1.42 1.41l.71.71zm1.41 8.49l-.7.7a1 1 0 01-1.42-1.4l.71-.71a1 1 0 011.41 1.41zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"/></svg>
+            Modo claro
+          </button>
+        </div>
+
+        <div class="cz-body">
+          <aside class="cz-preview">
+            <div class="cz-preview-box" id="cz-preview-box">
+              <svg id="cz-preview-svg" viewBox="0 0 200 200" aria-hidden="true"></svg>
             </div>
-            <span class="fs-letter big">A</span>
+            <span class="cz-preview-label">Vista previa</span>
+          </aside>
+
+          <div class="cz-sections">
+            <section class="cz-section">
+              <h4 class="cz-section-title">Círculos <span class="cz-tag">Común a ambos modos</span></h4>
+              <div id="circle-customizers-container" class="cz-circles"></div>
+            </section>
+
+            <section class="cz-section">
+              <h4 class="cz-section-title">Lienzo</h4>
+              <div class="cz-color-row">
+                <span class="cz-color-field">
+                  <button type="button" class="cz-chip" title="Cambiar color" aria-label="Fondo de la pantalla"></button>
+                  <input type="color" id="canvas-bg-input" value="#0b0d10" hidden />
+                </span>
+                <span class="cz-label">Fondo de la pantalla</span>
+                <button type="button" id="canvas-bg-reset" class="cz-reset" title="Restablecer" aria-label="Restablecer fondo de la pantalla">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a6 6 0 106-6H7"/><path d="M8.5 1.5L6 4l2.5 2.5"/></svg>
+                </button>
+              </div>
+              <div class="cz-color-row">
+                <span class="cz-color-field">
+                  <button type="button" class="cz-chip" title="Cambiar color" aria-label="Fondo de los círculos"></button>
+                  <input type="color" id="circles-bg-input" value="#0b0d10" hidden />
+                </span>
+                <span class="cz-label">Fondo de los círculos</span>
+                <button type="button" id="circles-bg-reset" class="cz-reset" title="Restablecer" aria-label="Restablecer fondo de los círculos">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a6 6 0 106-6H7"/><path d="M8.5 1.5L6 4l2.5 2.5"/></svg>
+                </button>
+              </div>
+            </section>
+
+            <section class="cz-section">
+              <h4 class="cz-section-title">Opacidad</h4>
+              <div class="cz-field">
+                <div class="cz-field-head">
+                  <label for="ring-opacity-slider" class="cz-label">Relleno de los círculos</label>
+                  <span id="ring-opacity-value" class="cz-value">7%</span>
+                </div>
+                <input type="range" id="ring-opacity-slider" class="cz-range" min="0" max="100" step="1" value="7" />
+              </div>
+              <div class="cz-field">
+                <div class="cz-field-head">
+                  <label for="glow-slider" class="cz-label">Degradado del fondo</label>
+                  <span id="glow-value" class="cz-value">0%</span>
+                </div>
+                <input type="range" id="glow-slider" class="cz-range" min="0" max="100" step="1" value="0" />
+              </div>
+              <div class="cz-field">
+                <div class="cz-field-head">
+                  <label for="grid-slider" class="cz-label">Cuadrícula</label>
+                  <span id="grid-value" class="cz-value">0%</span>
+                </div>
+                <input type="range" id="grid-slider" class="cz-range" min="0" max="100" step="1" value="0" />
+              </div>
+            </section>
+
+            <section class="cz-section">
+              <h4 class="cz-section-title">Texto <span class="cz-tag">Común a ambos modos</span></h4>
+              <span class="cz-label">Tamaño de los nombres</span>
+              <div class="cz-sizes" role="radiogroup" aria-label="Tamaño de los nombres">
+                <button type="button" class="cz-size" data-level="0" role="radio" aria-checked="false" aria-label="Tamaño 1"><span style="font-size: 9.5px">Texto</span></button>
+                <button type="button" class="cz-size" data-level="1" role="radio" aria-checked="false" aria-label="Tamaño 2"><span style="font-size: 12.8px">Texto</span></button>
+                <button type="button" class="cz-size" data-level="2" role="radio" aria-checked="false" aria-label="Tamaño 3"><span style="font-size: 16.6px">Texto</span></button>
+                <button type="button" class="cz-size" data-level="3" role="radio" aria-checked="false" aria-label="Tamaño 4"><span style="font-size: 20.9px">Texto</span></button>
+                <button type="button" class="cz-size" data-level="4" role="radio" aria-checked="false" aria-label="Tamaño 5"><span style="font-size: 26.1px">Texto</span></button>
+              </div>
+              <input type="range" id="font-size-slider" min="0" max="4" step="0.01" value="0" hidden />
+              <span id="font-size-value" hidden>Nivel 1</span>
+            </section>
           </div>
         </div>
-        <span class="field-hint modal-hint">Los cambios se guardan automáticamente · clic fuera para cerrar</span>
       </div>
     </div>
 
@@ -336,7 +437,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="app.js?v=202610172025"></script>
+  <script type="module" src="app.js?v=202610172247"></script>
   <script>
   (function () {
     const menu = document.getElementById('side-menu');
@@ -440,6 +541,445 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
     }
+  </script>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('btn-toggle-theme');
+      var label = document.getElementById('theme-label');
+      var meta = document.querySelector('meta[name="theme-color"]');
+      function toHex(col) {
+        col = (col || '').trim();
+        if (/^#[0-9a-f]{6}$/i.test(col)) return col.toUpperCase();
+        var m = col.match(/\d+/g);
+        if (!m || m.length < 3) return '#000000';
+        return '#' + m.slice(0, 3).map(function (n) { return (+n).toString(16).padStart(2, '0'); }).join('').toUpperCase();
+      }
+      var bgSettings = [
+        { key: 'canvas_bg', cssVar: '--canvas-bg', id: 'canvas-bg', fallback: function () { return getComputedStyle(root).getPropertyValue('--bg-app'); } },
+        { key: 'circles_bg', cssVar: '--circles-bg', id: 'circles-bg', fallback: function () {
+            var s = root.style.getPropertyValue('--canvas-bg');
+            return s || getComputedStyle(root).getPropertyValue('--bg-app');
+          } }
+      ];
+      window.__applyBgs = function (t) { applyBgs(t); };
+      function applyBgs(t) {
+        bgSettings.forEach(function (s) {
+          var saved = null;
+          try { saved = localStorage.getItem('circulos_' + s.key + '_' + t); } catch (e) {}
+          if (saved && /^#[0-9a-f]{6}$/i.test(saved)) root.style.setProperty(s.cssVar, saved);
+          else root.style.removeProperty(s.cssVar);
+        });
+        bgSettings.forEach(function (s) {
+          var input = document.getElementById(s.id + '-input');
+          var hex = document.getElementById(s.id + '-hex');
+          var reset = document.getElementById(s.id + '-reset');
+          var saved = root.style.getPropertyValue(s.cssVar).trim();
+          var shown = toHex(saved || s.fallback());
+          if (input) input.value = shown.toLowerCase();
+          if (hex) hex.textContent = shown;
+          if (reset) reset.style.visibility = saved ? 'visible' : 'hidden';
+        });
+      }
+      bgSettings.forEach(function (s) {
+        var input = document.getElementById(s.id + '-input');
+        var reset = document.getElementById(s.id + '-reset');
+        if (input) input.addEventListener('input', function () {
+          var t = root.getAttribute('data-theme') || 'dark';
+          try { localStorage.setItem('circulos_' + s.key + '_' + t, input.value); } catch (e) {}
+          applyBgs(t);
+        });
+        if (reset) reset.addEventListener('click', function () {
+          var t = root.getAttribute('data-theme') || 'dark';
+          try { localStorage.removeItem('circulos_' + s.key + '_' + t); } catch (e) {}
+          applyBgs(t);
+        });
+      });
+      var NUMS = [['ring_opacity', '--ring-opacity', 'ring-opacity', 7], ['glow', '--glow-strength', 'glow', 0], ['grid', '--grid-strength', 'grid', 0]];
+      function applyNums(t) {
+        NUMS.forEach(function (p) {
+          var v = null;
+          try { v = localStorage.getItem('circulos_' + p[0] + '_' + t); if (v === null) v = localStorage.getItem('circulos_' + p[0]); } catch (e) {}
+          v = (v !== null && v !== '' && !isNaN(+v)) ? Math.min(100, Math.max(0, Math.round(+v))) : p[3];
+          root.style.setProperty(p[1], v / 100);
+          var s = document.getElementById(p[2] + '-slider'), o = document.getElementById(p[2] + '-value');
+          if (s) s.value = v;
+          if (o) o.textContent = v + '%';
+        });
+      }
+      window.__setTheme = function (t) {
+        try { localStorage.setItem('circulos_theme', t); } catch (e) {}
+        apply(t);
+      };
+      function apply(t) {
+        root.setAttribute('data-theme', t);
+        applyNums(t);
+        applyBgs(t);
+        if (label) label.textContent = t === 'light' ? 'Modo nocturno' : 'Modo diurno';
+        if (meta) meta.setAttribute('content', t === 'light' ? '#F1EEE8' : '#0B0D10');
+      }
+      apply(root.getAttribute('data-theme') || 'dark');
+
+      var ro = document.getElementById('ring-opacity-slider');
+      var roVal = document.getElementById('ring-opacity-value');
+      if (ro) {
+        var cur = parseFloat(getComputedStyle(root).getPropertyValue('--ring-opacity'));
+        if (isNaN(cur)) cur = 0.07;
+        ro.value = Math.round(cur * 100);
+        roVal.textContent = ro.value + '%';
+        ro.addEventListener('input', function () {
+          root.style.setProperty('--ring-opacity', ro.value / 100);
+          roVal.textContent = ro.value + '%';
+          try { localStorage.setItem('circulos_ring_opacity_' + (root.getAttribute('data-theme') || 'dark'), ro.value); } catch (e) {}
+        });
+      }
+    })();
+  </script>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var modal = document.getElementById('modal-customize-circles');
+      var container = document.getElementById('circle-customizers-container');
+      var svg = document.getElementById('cz-preview-svg');
+      var ro = document.getElementById('ring-opacity-slider');
+      var fs = document.getElementById('font-size-slider');
+      var undoBtn = document.getElementById('cz-undo');
+      var redoBtn = document.getElementById('cz-redo');
+      var NS = 'http://www.w3.org/2000/svg';
+      var isOpen = function () { return !modal.classList.contains('hidden'); };
+      var theme = function () { return root.getAttribute('data-theme') || 'dark'; };
+
+      function cssVar(name) { return getComputedStyle(root).getPropertyValue(name).trim(); }
+
+      function circleInputs() {
+        var out = [], i = 0, c;
+        while ((c = document.getElementById('circle-color-' + i))) {
+          out.push({ color: c, name: document.getElementById('circle-name-' + i) });
+          i++;
+        }
+        return out;
+      }
+
+      var glowS = document.getElementById('glow-slider');
+      var gridS = document.getElementById('grid-slider');
+      [['glow', glowS], ['grid', gridS]].forEach(function (pair) {
+        var k = pair[0], el = pair[1];
+        if (!el) return;
+        var cur = parseFloat(getComputedStyle(root).getPropertyValue('--' + k + '-strength'));
+        el.value = Math.round((isNaN(cur) ? 0 : cur) * 100);
+        document.getElementById(k + '-value').textContent = el.value + '%';
+        el.addEventListener('input', function () {
+          root.style.setProperty('--' + k + '-strength', el.value / 100);
+          document.getElementById(k + '-value').textContent = el.value + '%';
+          try { localStorage.setItem('circulos_' + k + '_' + theme(), el.value); } catch (e) {}
+        });
+      });
+
+      modal.querySelectorAll('.cz-size').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (!fs) return;
+          fs.value = b.dataset.level;
+          fire(fs);
+          fs.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      });
+
+      function el(tag, attrs, parent) {
+        var n = document.createElementNS(NS, tag);
+        for (var k in attrs) n.setAttribute(k, attrs[k]);
+        (parent || svg).appendChild(n);
+        return n;
+      }
+
+      function renderPreview() {
+        var rows = circleInputs();
+        var n = rows.length || 4;
+        var op = ro ? ro.value / 100 : 0.07;
+        var screenBg = cssVar('--canvas-bg') || cssVar('--bg-app');
+        var ringsBg = root.style.getPropertyValue('--circles-bg').trim();
+        var glow = (glowS ? glowS.value / 100 : 0) * (parseFloat(cssVar('--glow-max')) || 0.12);
+        var grid = gridS ? gridS.value / 100 : 0;
+        var gridInk = cssVar('--grid-ink') || 'rgba(255,255,255,0.09)';
+        svg.innerHTML = '';
+        var defs = el('defs', {});
+        var rg = el('radialGradient', { id: 'czGlow', cx: '50%', cy: '48%', r: '62%' }, defs);
+        el('stop', { offset: '0%', 'stop-color': '#fff', 'stop-opacity': glow }, rg);
+        el('stop', { offset: '100%', 'stop-color': '#fff', 'stop-opacity': 0 }, rg);
+        var rm = el('radialGradient', { id: 'czMask', cx: '50%', cy: '48%', r: '70%' }, defs);
+        el('stop', { offset: '25%', 'stop-color': '#fff' }, rm);
+        el('stop', { offset: '100%', 'stop-color': '#fff', 'stop-opacity': 0 }, rm);
+        var mask = el('mask', { id: 'czGridMask' }, defs);
+        el('rect', { width: 200, height: 200, fill: 'url(#czMask)' }, mask);
+        var pat = el('pattern', { id: 'czGrid', width: 16, height: 16, patternUnits: 'userSpaceOnUse' }, defs);
+        el('path', { d: 'M16 0H0V16', fill: 'none', stroke: gridInk, 'stroke-width': 1 }, pat);
+        el('rect', { width: 200, height: 200, fill: screenBg });
+        if (glow > 0) el('rect', { width: 200, height: 200, fill: 'url(#czGlow)' });
+        if (grid > 0) el('rect', { width: 200, height: 200, fill: 'url(#czGrid)', opacity: grid, mask: 'url(#czGridMask)' });
+        if (ringsBg) el('circle', { cx: 100, cy: 100, r: 88, fill: ringsBg });
+        for (var i = n - 1; i >= 0; i--) {
+          var col = rows[i] ? rows[i].color.value : '#888888';
+          el('circle', { cx: 100, cy: 100, r: 88 * (i + 1) / n, fill: col, 'fill-opacity': op, stroke: col, 'stroke-opacity': 0.55, 'stroke-width': 1 });
+        }
+        modal.querySelectorAll('.cz-color-field').forEach(function (f) {
+          var hidden = f.querySelector('input[type="color"]');
+          var chip = f.querySelector('.cz-chip');
+          if (hidden && chip) chip.style.setProperty('--sw', hidden.value);
+        });
+        modal.querySelectorAll('.cz-range').forEach(function (r) { r.style.setProperty('--fill', r.value + '%'); });
+        modal.querySelectorAll('.cz-mode').forEach(function (b) {
+          var on = b.dataset.mode === theme();
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        var lvl = fs ? Math.floor(parseFloat(fs.value) + 1e-6) : 0;
+        modal.querySelectorAll('.cz-size').forEach(function (b) {
+          var on = +b.dataset.level === lvl;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
+      }
+
+      // ---- Deshacer / rehacer ----
+      var undo = [], redo = [], last = null;
+      function snap() {
+        var t = theme(), s = { theme: t, circles: [], font: fs ? fs.value : '0', opacity: ro ? ro.value : '7', glow: glowS ? glowS.value : '0', grid: gridS ? gridS.value : '0', bg: {} };
+        circleInputs().forEach(function (r) { s.circles.push([r.color.value, r.name.value]); });
+        ['canvas_bg', 'circles_bg'].forEach(function (k) {
+          var v = null; try { v = localStorage.getItem('circulos_' + k + '_' + t); } catch (e) {}
+          s.bg[k] = v;
+        });
+        return s;
+      }
+      var same = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); };
+      function fire(el) { el.dispatchEvent(new Event('input', { bubbles: true })); }
+      function restore(s) {
+        if (s.theme && s.theme !== theme() && window.__setTheme) window.__setTheme(s.theme);
+        var rows = circleInputs();
+        s.circles.forEach(function (c, i) {
+          if (!rows[i]) return;
+          rows[i].color.value = c[0];
+          rows[i].name.value = c[1];
+        });
+        if (rows[0]) fire(rows[0].color);
+        if (fs && fs.value !== s.font) { fs.value = s.font; fire(fs); }
+        if (ro && ro.value !== s.opacity) { ro.value = s.opacity; fire(ro); }
+        if (glowS && glowS.value !== s.glow) { glowS.value = s.glow; fire(glowS); }
+        if (gridS && gridS.value !== s.grid) { gridS.value = s.grid; fire(gridS); }
+        var t = theme();
+        Object.keys(s.bg).forEach(function (k) {
+          try {
+            if (s.bg[k]) localStorage.setItem('circulos_' + k + '_' + t, s.bg[k]);
+            else localStorage.removeItem('circulos_' + k + '_' + t);
+          } catch (e) {}
+        });
+        if (window.__applyBgs) window.__applyBgs(t);
+        last = snap();
+        renderPreview();
+        updateButtons();
+      }
+      function commit() {
+        var cur = snap();
+        if (last && !same(cur, last)) { undo.push(last); if (undo.length > 100) undo.shift(); redo = []; }
+        last = cur;
+        updateButtons();
+      }
+      function step(isRedo) {
+        commit();
+        var from = isRedo ? redo : undo, to = isRedo ? undo : redo;
+        if (!from.length) return;
+        to.push(last);
+        restore(from.pop());
+      }
+      function updateButtons() {
+        undoBtn.disabled = !undo.length;
+        redoBtn.disabled = !redo.length;
+      }
+
+      modal.addEventListener('input', function () { requestAnimationFrame(renderPreview); });
+      modal.addEventListener('change', function () { setTimeout(function () { commit(); renderPreview(); }, 0); });
+      modal.addEventListener('click', function (e) {
+        if (e.target.closest('.cz-reset')) setTimeout(function () { commit(); renderPreview(); }, 0);
+      });
+      modal.querySelectorAll('.cz-mode').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (b.dataset.mode === theme()) return;
+          closePicker();
+          commit();
+          window.__setTheme(b.dataset.mode);
+          renderPreview();
+          commit();
+        });
+      });
+      undoBtn.addEventListener('click', function () { step(false); });
+      redoBtn.addEventListener('click', function () { step(true); });
+      document.getElementById('cz-close').addEventListener('click', function () {
+        modal.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        modal.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      window.addEventListener('keydown', function (e) {
+        if (!isOpen() || e.isComposing) return;
+        var key = (e.key || '').toLowerCase();
+        if (!(e.ctrlKey || e.metaKey) || e.altKey || (key !== 'z' && key !== 'y')) return;
+        var a = document.activeElement;
+        var typingText = a && a.tagName === 'INPUT' && a.type === 'text' || (a && a.tagName === 'TEXTAREA');
+        if (typingText && !e.shiftKey && key === 'z' && a.dataset.dirty === '1') return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (typingText) a.blur();
+        step(key === 'y' || e.shiftKey);
+      }, true);
+      // Ctrl+Z en un nombre recién escrito: primero deshace el texto (nativo)
+      container.addEventListener('input', function (e) { if (e.target.classList.contains('cz-name')) e.target.dataset.dirty = '1'; });
+      container.addEventListener('change', function (e) { if (e.target.classList.contains('cz-name')) e.target.dataset.dirty = ''; });
+
+      // ---- Selector de color propio: espectro + tono + un único código HEX ----
+      var picker = document.createElement('div');
+      picker.className = 'cz-picker hidden';
+      picker.innerHTML =
+        '<div class="cz-sv"><div class="cz-sv-knob"></div></div>' +
+        '<div class="cz-hue"><div class="cz-hue-knob"></div></div>' +
+        '<div class="cz-picker-row"><span class="cz-picker-chip"></span>' +
+        '<input type="text" class="cz-picker-hex" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Código de color" /></div>';
+      document.body.appendChild(picker);
+      var sv = picker.querySelector('.cz-sv'), svKnob = picker.querySelector('.cz-sv-knob');
+      var hue = picker.querySelector('.cz-hue'), hueKnob = picker.querySelector('.cz-hue-knob');
+      var pChip = picker.querySelector('.cz-picker-chip'), pHex = picker.querySelector('.cz-picker-hex');
+      var target = null, anchor = null, H = 0, S = 0, V = 0;
+
+      var HEX = /^#?([0-9a-f]{6})$/i;
+      function norm(v) { var m = (v || '').trim().match(HEX); return m ? '#' + m[1].toUpperCase() : null; }
+      function hexToHsv(hex) {
+        var n = parseInt(hex.slice(1), 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+        var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, h = 0;
+        if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h = (h * 60 + 360) % 360;
+        return [h, mx ? d / mx : 0, mx];
+      }
+      function hsvToHex(h, s, v) {
+        var f = function (n) { var k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+        return '#' + [f(5), f(3), f(1)].map(function (x) { return Math.round(x * 255).toString(16).padStart(2, '0'); }).join('').toUpperCase();
+      }
+      function paintPicker() {
+        var hex = hsvToHex(H, S, V);
+        sv.style.setProperty('--hue', hsvToHex(H, 1, 1));
+        svKnob.style.left = (S * 100) + '%';
+        svKnob.style.top = ((1 - V) * 100) + '%';
+        svKnob.style.background = hex;
+        hueKnob.style.left = (H / 360 * 100) + '%';
+        pChip.style.background = hex;
+        if (document.activeElement !== pHex) { pHex.value = hex; pHex.classList.remove('invalid'); }
+      }
+      function setTarget(hex, commitIt) {
+        if (!target) return;
+        target.value = hex.toLowerCase();
+        fire(target);
+        if (commitIt) target.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      function openPicker(field) {
+        target = field.querySelector('input[type="color"]');
+        anchor = field;
+        var hsv = hexToHsv(norm(target.value) || '#000000');
+        H = hsv[0]; S = hsv[1]; V = hsv[2];
+        picker.classList.remove('hidden');
+        var r = field.getBoundingClientRect(), pw = picker.offsetWidth, ph = picker.offsetHeight;
+        var left = Math.min(window.innerWidth - pw - 12, Math.max(12, r.left - 4));
+        var top = r.bottom + 6;
+        if (top + ph > window.innerHeight - 12) top = Math.max(12, r.top - ph - 6);
+        picker.style.left = left + 'px';
+        picker.style.top = top + 'px';
+        modal.querySelectorAll('.cz-color-field.active').forEach(function (f) { f.classList.remove('active'); });
+        field.classList.add('active');
+        paintPicker();
+      }
+      function closePicker() {
+        if (picker.classList.contains('hidden')) return;
+        picker.classList.add('hidden');
+        if (anchor) anchor.classList.remove('active');
+        target = null; anchor = null;
+      }
+      function drag(el, onMove) {
+        el.addEventListener('pointerdown', function (e) {
+          e.preventDefault();
+          el.setPointerCapture(e.pointerId);
+          var move = function (ev) {
+            var r = el.getBoundingClientRect();
+            onMove(Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height)));
+            paintPicker();
+            setTarget(hsvToHex(H, S, V), false);
+          };
+          var up = function () {
+            el.removeEventListener('pointermove', move);
+            el.removeEventListener('pointerup', up);
+            el.removeEventListener('pointercancel', up);
+            setTarget(hsvToHex(H, S, V), true);
+          };
+          move(e);
+          el.addEventListener('pointermove', move);
+          el.addEventListener('pointerup', up);
+          el.addEventListener('pointercancel', up);
+        });
+      }
+      drag(sv, function (x, y) { S = x; V = 1 - y; });
+      drag(hue, function (x) { H = x * 360; });
+
+      function bindHex(input, getTarget) {
+        input.addEventListener('input', function () {
+          var v = norm(input.value);
+          input.classList.toggle('invalid', !v && input.value.length > 0);
+          if (!v) return;
+          var t = getTarget(); if (!t) return;
+          t.value = v.toLowerCase(); fire(t);
+          if (t === target) { var hsv = hexToHsv(v); H = hsv[0]; S = hsv[1]; V = hsv[2]; paintPicker(); }
+        });
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+        input.addEventListener('blur', function () {
+          var t = getTarget(); if (!t) return;
+          input.value = t.value.toUpperCase();
+          input.classList.remove('invalid');
+          t.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+      bindHex(pHex, function () { return target; });
+      modal.addEventListener('focusin', function (e) {
+        var inp = e.target.closest && e.target.closest('.cz-hex-input');
+        if (inp && !inp.dataset.bound) {
+          inp.dataset.bound = '1';
+          bindHex(inp, function () { return inp.parentElement.querySelector('input[type="color"]'); });
+        }
+      });
+      modal.addEventListener('click', function (e) {
+        var chip = e.target.closest('.cz-chip');
+        if (!chip) return;
+        var f = chip.closest('.cz-color-field');
+        if (anchor === f) closePicker(); else openPicker(f);
+      });
+      document.addEventListener('pointerdown', function (e) {
+        if (picker.classList.contains('hidden')) return;
+        if (picker.contains(e.target) || (anchor && anchor.contains(e.target))) return;
+        closePicker();
+      }, true);
+      window.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !picker.classList.contains('hidden')) {
+          e.preventDefault(); e.stopImmediatePropagation(); closePicker();
+        }
+      }, true);
+      modal.querySelector('.cz-sections').addEventListener('scroll', closePicker);
+      window.addEventListener('resize', closePicker);
+
+      new MutationObserver(function () {
+        if (!isOpen()) closePicker();
+        if (isOpen()) {
+          requestAnimationFrame(function () {
+            renderPreview();
+            last = snap();
+            updateButtons();
+          });
+        } else {
+          commit();
+        }
+      }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+    })();
   </script>
 </body>
 </html>
