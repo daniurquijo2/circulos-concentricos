@@ -1174,3 +1174,52 @@ textarea { resize: vertical; line-height: 1.55; }
 .ctx-menu button:hover, .ctx-menu button:focus-visible { background: var(--bg-raise); color: var(--text-main); outline: none; }
 .ctx-menu button.danger { color: var(--danger); }
 .ctx-menu button.danger:hover { background: rgba(201, 105, 94, 0.12); }
+
+/* Menú «Opciones» */
+.options-container { position: relative; }
+.options-dropdown { left: auto; right: 0; width: 250px; }
+.options-email {
+  padding: 0 12px 6px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-kbd, .shortcut-keys kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-soft);
+  background: var(--bg-raise);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.menu-kbd { margin-left: auto; }
+
+/* Ventana de atajos */
+.shortcuts-list { display: flex; flex-direction: column; gap: 16px; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+.shortcuts-group-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8B95A3;
+  margin-bottom: 6px;
+}
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 7px;
+}
+.shortcut-row:nth-child(even) { background: var(--bg-field); }
+.shortcut-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.kbd-plus { font-size: 11px; color: var(--text-faint); }
+.shortcut-text { font-size: 13px; color: var(--text-soft); }
+@media (max-width: 640px) { .shortcut-row { grid-template-columns: 1fr; gap: 4px; } }

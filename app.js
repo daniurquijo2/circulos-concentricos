@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610151833';
+} from './firebase-config.js?v=202610172022';
 
 export const state = {
   user: null,
@@ -49,6 +49,12 @@ const dom = {
   btnAuthAction: document.getElementById('btn-auth-action'),
   userEmailDisplay: document.getElementById('user-email-display'),
   btnShowList: document.getElementById('btn-show-list'),
+  btnOptions: document.getElementById('btn-options'),
+  optionsDropdown: document.getElementById('options-dropdown'),
+  authActionLabel: document.getElementById('auth-action-label'),
+  btnShowShortcuts: document.getElementById('btn-show-shortcuts'),
+  modalShortcuts: document.getElementById('modal-shortcuts'),
+  shortcutsList: document.getElementById('shortcuts-list'),
   sideMenu: document.getElementById('side-menu'),
   canvasContainer: document.getElementById('canvas-container'),
   svgCanvas: document.getElementById('circles-canvas'),
@@ -211,7 +217,7 @@ function initEventListeners() {
     closeModal(dom.modalNewNucleus);
   });
 
-  dom.btnCustomizeCircles.addEventListener('click', openCircleCustomizerModal);
+  dom.btnCustomizeCircles.addEventListener('click', () => { closeOptionsMenu(); openCircleCustomizerModal(); });
   initSearch();
   initBooksEditors();
   dom.fontSizeSlider.addEventListener('input', () => {
@@ -286,6 +292,7 @@ function initEventListeners() {
   });
 
   dom.btnAuthAction.addEventListener('click', handleAuthButtonClick);
+  initOptionsMenu();
   dom.formAuth.addEventListener('submit', handleAuthSubmit);
   dom.btnToggleAuthMode.addEventListener('click', toggleAuthMode);
 }
@@ -1323,6 +1330,75 @@ function undoRedo(redo) {
   showToast(`${redo ? 'Rehecho' : 'Deshecho'}: ${entry.label}`);
 }
 
+// ---- Menú «Opciones» ----
+function closeOptionsMenu() {
+  if (!dom.optionsDropdown) return;
+  dom.optionsDropdown.classList.add('hidden');
+  dom.btnOptions.setAttribute('aria-expanded', 'false');
+}
+
+function initOptionsMenu() {
+  dom.btnOptions.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = dom.optionsDropdown.classList.contains('hidden');
+    dom.nucleusDropdown.classList.add('hidden');
+    dom.optionsDropdown.classList.toggle('hidden', !open);
+    dom.btnOptions.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!dom.optionsDropdown.contains(e.target) && !dom.btnOptions.contains(e.target)) closeOptionsMenu();
+  });
+  dom.btnShowShortcuts.addEventListener('click', () => {
+    closeOptionsMenu();
+    openShortcutsModal();
+  });
+}
+
+// Lista de atajos que se muestra en Opciones → Atajos de teclado.
+// IMPORTANTE: cada atajo nuevo que se añada a la app debe añadirse también aquí.
+const SHORTCUTS = [
+  { group: 'General', items: [
+    { keys: ['Ctrl', 'F'], text: 'Buscar personas' },
+    { keys: ['Esc'], text: 'Cerrar todo lo abierto (guardando los cambios)' },
+    { keys: ['Ctrl', 'Z'], text: 'Deshacer (crear, eliminar, mover, editar, archivar…)' },
+    { keys: ['Ctrl', 'Mayús', 'Z'], text: 'Rehacer (también Ctrl+Y)' }
+  ]},
+  { group: 'Teclas sueltas', items: [
+    { keys: ['N'], text: 'Añadir un participante nuevo' },
+    { keys: ['Q'], text: 'Ver todos los participantes' },
+    { keys: ['P'], text: 'Personalizar círculos' },
+    { keys: ['A'], text: 'Abrir el perfil de la ficha flotante abierta' }
+  ]},
+  { group: 'Ratón y panel táctil', items: [
+    { keys: ['Rueda'], text: 'Acercar o alejar los círculos' },
+    { keys: ['Pellizcar'], text: 'Acercar o alejar con dos dedos en el panel táctil' },
+    { keys: ['Arrastrar fondo'], text: 'Moverse por el lienzo' },
+    { keys: ['Doble clic', 'fondo'], text: 'Volver a la vista completa' },
+    { keys: ['Clic', 'nombre'], text: 'Mostrar su ficha flotante' },
+    { keys: ['Doble clic', 'nombre'], text: 'Abrir su perfil' },
+    { keys: ['Ctrl', 'clic', 'nombre'], text: 'Abrir su perfil' },
+    { keys: ['Clic derecho', 'nombre'], text: 'Archivar, eliminar o editar' }
+  ]},
+  { group: 'Al escribir', items: [
+    { keys: ['Intro'], text: 'Crear la persona / cerrar el perfil guardando' },
+    { keys: ['Mayús', 'Intro'], text: 'Salto de línea en «Próximos pasos»' },
+    { keys: ['↓', '↑'], text: 'Siguiente / anterior resultado en el buscador' }
+  ]}
+];
+
+function openShortcutsModal() {
+  dom.shortcutsList.innerHTML = SHORTCUTS.map((g) => `
+    <div class="shortcuts-group">
+      <div class="shortcuts-group-title">${escapeHtml(g.group)}</div>
+      ${g.items.map((it) => `
+        <div class="shortcut-row">
+          <span class="shortcut-keys">${it.keys.map((k) => `<kbd>${escapeHtml(k)}</kbd>`).join('<span class="kbd-plus">+</span>')}</span>
+          <span class="shortcut-text">${escapeHtml(it.text)}</span>
+        </div>`).join('')}
+    </div>`).join('');
+  dom.modalShortcuts.classList.remove('hidden');
+}
+
 // ---- Atajos de teclado ----
 function isTypingTarget(el) {
   if (!el) return false;
@@ -1357,6 +1433,7 @@ function openAddParticipantMenu() {
 // Cierra todo lo que esté abierto (guardando lo que haya en el menú lateral)
 function closeEverything() {
   closeContextMenu();
+  closeOptionsMenu();
   document.querySelectorAll('.modal-overlay:not(.hidden)').forEach((m) => closeModal(m));
   dom.nucleusDropdown.classList.add('hidden');
   if (!dom.searchBox.classList.contains('hidden')) closeSearch();
@@ -2015,14 +2092,17 @@ function initModals() {
 function updateAuthUI() {
   if (state.user) {
     dom.userEmailDisplay.textContent = state.user.email;
-    dom.btnAuthAction.textContent = 'Cerrar sesión';
+    dom.userEmailDisplay.classList.remove('hidden');
+    dom.authActionLabel.textContent = 'Cerrar sesión';
   } else {
     dom.userEmailDisplay.textContent = '';
-    dom.btnAuthAction.textContent = 'Iniciar sesión';
+    dom.userEmailDisplay.classList.add('hidden');
+    dom.authActionLabel.textContent = 'Iniciar sesión';
   }
 }
 
 function handleAuthButtonClick() {
+  closeOptionsMenu();
   if (state.user) {
     logoutUser();
     state.user = null;
