@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610172022';
+} from './firebase-config.js?v=202610172025';
 
 export const state = {
   user: null,
@@ -394,12 +394,45 @@ function initCanvasZoom() {
   // Rueda del ratón y pellizco con dos dedos en el panel táctil.
   // El navegador envía el pellizco como «rueda + Ctrl» con pasos pequeños,
   // así que se amplifica para que vaya a un ritmo parecido a la rueda.
+  // Deslizar dos dedos en el panel táctil (sin pellizcar) mueve el lienzo,
+  // como al bajar por una página. La rueda del ratón sigue haciendo zoom.
+  let lastTrackpadAt = 0;
+  const looksLikeTrackpad = (e) => {
+    if (e.deltaMode !== 0) return false;              // ratón en «líneas» (Firefox)
+    if (e.deltaX !== 0 && !e.shiftKey) return true;  // desplazamiento lateral: panel
+    const w = e.wheelDeltaY;
+    const hasW = typeof w === 'number' && w !== 0;
+    if (hasW && Math.abs(w + 3 * e.deltaY) < 1) return true;            // Chrome: panel = deltaY×3
+    if (!Number.isInteger(e.deltaY) && Math.abs(e.deltaY) < 50) return true; // pasos finos
+    if (hasW && Math.abs(w) % 120 !== 0) return true;                   // la rueda da múltiplos de 120
+    return false;
+  };
+
   dom.canvasContainer.addEventListener('wheel', (e) => {
     e.preventDefault();
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
-    const dy = e.deltaY * unit;
-    const speed = e.ctrlKey ? 0.012 : 0.002;
-    zoomAt(e.clientX, e.clientY, Math.exp(-dy * speed));
+    const now = performance.now();
+
+    // Pellizco (el navegador lo envía como rueda + Ctrl) o Ctrl+rueda: zoom
+    if (e.ctrlKey) {
+      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * unit * 0.012));
+      return;
+    }
+
+    // Panel táctil: un gesto genera muchos eventos seguidos, así que si uno
+    // parece de panel, los siguientes del mismo gesto también lo son.
+    const trackpad = looksLikeTrackpad(e) || (now - lastTrackpadAt < 250);
+    if (trackpad) {
+      lastTrackpadAt = now;
+      const k = pxPerUnit();
+      view.x += (e.deltaX * unit) / k;
+      view.y += (e.deltaY * unit) / k;
+      applyViewBox();
+      return;
+    }
+
+    // Rueda del ratón: zoom
+    zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * unit * 0.002));
   }, { passive: false });
 
   // Fuera del lienzo (menús, cabecera…), el pellizco no debe ampliar toda la página
@@ -1372,6 +1405,7 @@ const SHORTCUTS = [
   { group: 'Ratón y panel táctil', items: [
     { keys: ['Rueda'], text: 'Acercar o alejar los círculos' },
     { keys: ['Pellizcar'], text: 'Acercar o alejar con dos dedos en el panel táctil' },
+    { keys: ['Deslizar 2 dedos'], text: 'Moverse arriba, abajo y a los lados en el panel táctil' },
     { keys: ['Arrastrar fondo'], text: 'Moverse por el lienzo' },
     { keys: ['Doble clic', 'fondo'], text: 'Volver a la vista completa' },
     { keys: ['Clic', 'nombre'], text: 'Mostrar su ficha flotante' },
