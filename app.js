@@ -11,7 +11,7 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc
-} from './firebase-config.js?v=202610172247';
+} from './firebase-config.js?v=202610172307';
 
 export const state = {
   user: null,
@@ -272,6 +272,13 @@ function initEventListeners() {
     const t = e.target;
     if (dom.sideMenu.contains(t)) return;
     if (t.closest('.modal-overlay') || t.closest('#person-pop') || t.closest('#btn-show-list') || t.closest('#toast') || t.closest('.ctx-menu')) return;
+    // Clic sobre un nombre: esperar un instante antes de cerrar el menú, para que
+    // un doble clic llegue a la misma persona antes de que el lienzo se desplace
+    if (t.closest('.participant-node')) {
+      clearTimeout(pendingMenuClose);
+      pendingMenuClose = setTimeout(() => { pendingMenuClose = null; closeSideMenuSaving(); }, DBLCLICK_GRACE_MS);
+      return;
+    }
     closeSideMenuSaving();
   }, true);
   // Intro guarda; Mayús+Intro hace salto de línea en los textos largos
@@ -1535,6 +1542,13 @@ function initKeyboardShortcuts() {
 }
 
 // ---- Abrir/cerrar el menú lateral ----
+const DBLCLICK_GRACE_MS = 300;   // margen para el doble clic sobre un nombre
+let pendingMenuClose = null;
+function cancelPendingMenuClose() {
+  clearTimeout(pendingMenuClose);
+  pendingMenuClose = null;
+}
+
 function sideMenuCurrentView() {
   if (isDetailOpen()) return 'detail';
   return window.__sideMenu ? window.__sideMenu.current() : 'main';
@@ -1739,6 +1753,7 @@ function initContextMenu() {
     const node = e.target.closest('.participant-node');
     if (!node || !node.dataset.id) return;
     e.preventDefault();
+    cancelPendingMenuClose();   // es un doble clic: el menú se queda abierto con su perfil
     closePersonPop();
     openParticipantDetail(node.dataset.id);
   });
