@@ -12,7 +12,7 @@ import {
   joinNucleusByInvite,
   renameNucleusDoc,
   fetchParticipants
-} from './firebase-config.js?v=202610181803';
+} from './firebase-config.js?v=202610181807';
 
 export const state = {
   user: null,
@@ -49,12 +49,9 @@ const dom = {
   btnNewNucleus: document.getElementById('btn-new-nucleus'),
   btnShareNucleus: document.getElementById('btn-share-nucleus'),
   btnCustomizeCircles: document.getElementById('btn-customize-circles'),
-  btnAuthAction: document.getElementById('btn-auth-action'),
-  userEmailDisplay: document.getElementById('user-email-display'),
   btnShowList: document.getElementById('btn-show-list'),
   btnOptions: document.getElementById('btn-options'),
   optionsDropdown: document.getElementById('options-dropdown'),
-  authActionLabel: document.getElementById('auth-action-label'),
   btnShowShortcuts: document.getElementById('btn-show-shortcuts'),
   modalShortcuts: document.getElementById('modal-shortcuts'),
   shortcutsList: document.getElementById('shortcuts-list'),
@@ -133,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCanvas();
   renderParticipantsList();
   updateNucleusUI();
+  updateAuthUI();
   initHome();
 
   window.addEventListener('resize', () => renderCanvas());
@@ -315,7 +313,11 @@ function initEventListeners() {
     });
   });
 
-  dom.btnAuthAction.addEventListener('click', handleAuthButtonClick);
+  // Cuenta (arriba a la derecha): iniciar sesión, crear cuenta o cerrar sesión
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-auth]');
+    if (b) handleAuthButtonClick(b.dataset.auth);
+  });
   initOptionsMenu();
   dom.formAuth.addEventListener('submit', handleAuthSubmit);
   dom.btnToggleAuthMode.addEventListener('click', toggleAuthMode);
@@ -1432,7 +1434,7 @@ const SHORTCUTS = [
   { group: 'Teclas sueltas', items: [
     { keys: ['N'], text: 'Añadir un participante nuevo (en el inicio: crear un núcleo)' },
     { keys: ['Q'], text: 'Ver todos los participantes' },
-    { keys: ['P'], text: 'Personalizar círculos' },
+    { keys: ['P'], text: 'Personalizar (en el inicio: tema y fondo del inicio)' },
     { keys: ['A'], text: 'Abrir el perfil de la ficha flotante abierta' }
   ]},
   { group: 'Ratón y panel táctil', items: [
@@ -1542,6 +1544,7 @@ function initKeyboardShortcuts() {
 
     if (isHomeOpen()) {
       if (key === 'n') { e.preventDefault(); openNewNucleusModal(); }
+      else if (key === 'p') { e.preventDefault(); openCircleCustomizerModal(); }
       return;
     }
 
@@ -2205,26 +2208,24 @@ function initModals() {
 }
 
 function updateAuthUI() {
-  if (state.user) {
-    dom.userEmailDisplay.textContent = state.user.email;
-    dom.userEmailDisplay.classList.remove('hidden');
-    dom.authActionLabel.textContent = 'Cerrar sesión';
-  } else {
-    dom.userEmailDisplay.textContent = '';
-    dom.userEmailDisplay.classList.add('hidden');
-    dom.authActionLabel.textContent = 'Iniciar sesión';
-  }
+  const html = state.user
+    ? `<span class="account-email" title="${escapeHtml(state.user.email || '')}">${escapeHtml(state.user.email || '')}</span>
+       <button type="button" class="account-btn" data-auth="logout">Cerrar sesión</button>`
+    : `<button type="button" class="account-btn" data-auth="login">Iniciar sesión</button>
+       <button type="button" class="account-btn primary" data-auth="register">Crear cuenta</button>`;
+  document.querySelectorAll('[data-account]').forEach((box) => { box.innerHTML = html; });
 }
 
-function handleAuthButtonClick() {
+function handleAuthButtonClick(action) {
   closeOptionsMenu();
-  if (state.user) {
+  if (action === 'logout') {
     logoutUser();
     state.user = null;
     updateAuthUI();
+    if (isHomeOpen()) renderHome();
     showToast('Sesión cerrada.');
   } else {
-    openAuthModal('login');
+    openAuthModal(action === 'register' ? 'register' : 'login');
   }
 }
 
@@ -2429,7 +2430,7 @@ function renderHome() {
   if (!dom.homeGrid) return;
   dom.homeSub.textContent = state.user
     ? `Sesión iniciada como ${state.user.email} · se sincronizan entre dispositivos`
-    : 'Guardados en este navegador · inicia sesión en Opciones para sincronizarlos';
+    : 'Guardados en este navegador · inicia sesión arriba a la derecha para sincronizarlos';
 
   const icon = {
     rename: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.59 3.59a2 2 0 012.82 2.82l-8.5 8.5a1 1 0 01-.46.26l-3.2.8a.5.5 0 01-.6-.6l.8-3.2a1 1 0 01.26-.46l8.5-8.5z"/></svg>',
