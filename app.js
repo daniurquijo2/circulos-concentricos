@@ -10,8 +10,9 @@ import {
   deleteParticipantDoc,
   getUserNucleiList,
   joinNucleusByInvite,
-  renameNucleusDoc
-} from './firebase-config.js?v=202610172307';
+  renameNucleusDoc,
+  fetchParticipants
+} from './firebase-config.js?v=202610181803';
 
 export const state = {
   user: null,
@@ -30,6 +31,8 @@ export const state = {
     { id: 'default-nucleus', name: 'Núcleo Principal' }
   ],
   participants: [],
+  // participantes de cada núcleo (los del núcleo abierto están en `participants`)
+  participantsByNucleus: {},
   selectedParticipantId: null,
   sidebarOpen: false,
   groupByCircle: true,
@@ -115,7 +118,11 @@ const dom = {
   btnRenameNucleus: document.getElementById('btn-rename-nucleus'),
   modalRenameNucleus: document.getElementById('modal-rename-nucleus'),
   formRenameNucleus: document.getElementById('form-rename-nucleus'),
-  inputRenameNucleus: document.getElementById('input-rename-nucleus')
+  inputRenameNucleus: document.getElementById('input-rename-nucleus'),
+  btnHome: document.getElementById('btn-home'),
+  btnAllNuclei: document.getElementById('btn-all-nuclei'),
+  homeGrid: document.getElementById('home-grid'),
+  homeSub: document.getElementById('home-sub')
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -126,6 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCanvas();
   renderParticipantsList();
   updateNucleusUI();
+  initHome();
 
   window.addEventListener('resize', () => renderCanvas());
 
@@ -143,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initFirebaseCloud((user) => {
     state.user = user;
     updateAuthUI();
+    if (isHomeOpen()) renderHome();
     if (user) {
       loadUserCloudData();
     } else if (getPendingJoin()) {
@@ -163,11 +172,13 @@ function clearPendingJoin() {
 }
 
 function saveLocalState() {
+  state.participantsByNucleus[state.activeNucleusId] = state.participants;
   localStorage.setItem('circulos_state', JSON.stringify({
     activeNucleusId: state.activeNucleusId,
     activeNucleus: state.activeNucleus,
     nucleiList: state.nucleiList,
-    participants: state.participants
+    participants: state.participants,
+    participantsByNucleus: state.participantsByNucleus
   }));
 }
 
@@ -179,7 +190,13 @@ function loadLocalState() {
       if (data.activeNucleus) state.activeNucleus = data.activeNucleus;
       if (data.activeNucleusId) state.activeNucleusId = data.activeNucleusId;
       if (data.nucleiList) state.nucleiList = data.nucleiList;
-      if (data.participants) state.participants = data.participants;
+      if (data.participantsByNucleus && typeof data.participantsByNucleus === 'object') {
+        state.participantsByNucleus = data.participantsByNucleus;
+      }
+      const own = state.participantsByNucleus[state.activeNucleusId];
+      if (Array.isArray(own)) state.participants = own;
+      else if (data.participants) state.participants = data.participants;
+      state.participantsByNucleus[state.activeNucleusId] = state.participants;
     } catch (e) {
       console.error(e);
     }
@@ -204,7 +221,7 @@ function initEventListeners() {
     dom.inputNewNucleusName.focus();
   });
 
-  dom.btnShareNucleus.addEventListener('click', copyInviteLink);
+  dom.btnShareNucleus.addEventListener('click', () => copyInviteLink());
 
   dom.btnRenameNucleus.addEventListener('click', () => openRenameNucleus(state.activeNucleusId));
   dom.formRenameNucleus.addEventListener('submit', (e) => {
@@ -1413,7 +1430,7 @@ const SHORTCUTS = [
     { keys: ['Ctrl', 'Mayús', 'Z'], text: 'Rehacer (también Ctrl+Y)' }
   ]},
   { group: 'Teclas sueltas', items: [
-    { keys: ['N'], text: 'Añadir un participante nuevo' },
+    { keys: ['N'], text: 'Añadir un participante nuevo (en el inicio: crear un núcleo)' },
     { keys: ['Q'], text: 'Ver todos los participantes' },
     { keys: ['P'], text: 'Personalizar círculos' },
     { keys: ['A'], text: 'Abrir el perfil de la ficha flotante abierta' }
@@ -1509,6 +1526,7 @@ function initKeyboardShortcuts() {
     // Ctrl+Z / Ctrl+Mayús+Z (o Ctrl+Y): deshacer / rehacer.
     // Dentro de un campo de texto, el deshacer normal del texto.
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y')) {
+      if (isHomeOpen()) return;
       // con el formulario de alta vacío no hay texto que deshacer:
       // Ctrl+Z deshace lo último de la app (p. ej. la persona recién creada)
       const addFormEmpty = dom.formAddParticipant.contains(document.activeElement)
@@ -1521,6 +1539,11 @@ function initKeyboardShortcuts() {
 
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     if (typing || anyModalOpen()) return;
+
+    if (isHomeOpen()) {
+      if (key === 'n') { e.preventDefault(); openNewNucleusModal(); }
+      return;
+    }
 
     if (key === 'n') {            // N: nuevo participante
       e.preventDefault();
@@ -1790,32 +1813,52 @@ function updateNucleusUI() {
     li.appendChild(edit);
 
     li.addEventListener('click', () => {
-      switchNucleus(n.id);
       dom.nucleusDropdown.classList.add('hidden');
+      openNucleus(n.id);
     });
     dom.nucleusList.appendChild(li);
   });
+  if (isHomeOpen()) renderHome();
+  else document.title = `${state.activeNucleus.name} · Círculos`;
+}
+
+// Cierra lo que dependa del núcleo abierto (guardando) antes de cambiar de vista
+function leaveCurrentNucleus() {
+  closeContextMenu();
+  closePersonPop();
+  if (!dom.searchBox.classList.contains('hidden')) closeSearch();
+  if (!dom.sideMenu.classList.contains('collapsed')) closeSideMenuSaving();
+  flushCustomizerSave();
+}
+
+// Copia el núcleo abierto (nombre, círculos, tamaño de letra…) a su entrada de la lista
+function syncActiveIntoList() {
+  const entry = state.nucleiList.find((n) => n.id === state.activeNucleusId);
+  if (entry && state.activeNucleus && state.activeNucleus.id === state.activeNucleusId) {
+    Object.assign(entry, state.activeNucleus);
+  }
 }
 
 function switchNucleus(nucleusId) {
+  if (nucleusId === state.activeNucleusId) return;
+  leaveCurrentNucleus();
+  syncActiveIntoList();
+  // guardar los participantes del núcleo que dejamos y traer los del nuevo
+  state.participantsByNucleus[state.activeNucleusId] = state.participants;
+  const cached = state.participantsByNucleus[nucleusId];
+  state.participants = Array.isArray(cached) ? cached : [];
+
   state.activeNucleusId = nucleusId;
   const found = state.nucleiList.find(n => n.id === nucleusId);
-  if (found) {
-    state.activeNucleus.id = found.id;
-    state.activeNucleus.name = found.name;
-    if (found.circles) state.activeNucleus.circles = found.circles;
-  }
+  state.activeNucleus = found
+    ? { ...found, circles: found.circles || defaultCircles() }
+    : { id: nucleusId, name: 'Núcleo', circles: defaultCircles() };
 
   saveLocalState();
   updateNucleusUI();
-
-  if (state.user) {
-    listenToNucleusRealtime(nucleusId);
-  } else {
-    renderCanvas();
-    renderParticipantsList();
-  }
-  showToast(`Cambiado a núcleo: ${state.activeNucleus.name}`);
+  renderCanvas();
+  renderParticipantsList();
+  if (state.user) listenToNucleusRealtime(nucleusId);
 }
 
 function newNucleusId() {
@@ -1824,33 +1867,46 @@ function newNucleusId() {
   return 'nuc_' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function createNewNucleus(name) {
-  const newId = newNucleusId();
-  const defaultCircles = [
+function defaultCircles() {
+  return [
     { id: 0, name: 'Círculo 1', color: '#3b82f6', ratio: 0.25 },
     { id: 1, name: 'Círculo 2', color: '#10b981', ratio: 0.50 },
     { id: 2, name: 'Círculo 3', color: '#f59e0b', ratio: 0.75 },
     { id: 3, name: 'Círculo 4', color: '#ef4444', ratio: 1.00 }
   ];
+}
 
+function createNewNucleus(name) {
+  const newId = newNucleusId();
+  const circles = defaultCircles();
   const newNucleus = {
     id: newId,
     name,
-    circles: defaultCircles,
+    circles,
     ownerId: state.user ? state.user.uid : 'local'
   };
 
-  state.nucleiList.push({ id: newId, name, circles: defaultCircles });
+  leaveCurrentNucleus();
+  syncActiveIntoList();
+  state.participantsByNucleus[state.activeNucleusId] = state.participants;
+  state.nucleiList.push({ ...newNucleus });
   state.activeNucleusId = newId;
   state.activeNucleus = newNucleus;
   state.participants = [];
 
   saveLocalState();
-  if (state.user) saveNucleusDoc(newNucleus);
+  if (state.user) {
+    // dejar de escuchar el núcleo anterior y escuchar el nuevo cuando ya exista
+    if (state.unsubscribeNucleus) { state.unsubscribeNucleus(); state.unsubscribeNucleus = null; }
+    saveNucleusDoc(newNucleus)
+      .then(() => { if (state.activeNucleusId === newId) listenToNucleusRealtime(newId); })
+      .catch((err) => { console.error(err); showToast('No se pudo guardar el núcleo en la nube.'); });
+  }
 
   updateNucleusUI();
   renderCanvas();
   renderParticipantsList();
+  openNucleus(newId);
   showToast(`Núcleo "${name}" creado.`);
 }
 
@@ -1884,14 +1940,14 @@ async function renameNucleus(nucleusId, name) {
   showToast(`Núcleo renombrado a "${name}"`);
 }
 
-function copyInviteLink() {
+function copyInviteLink(nucleusId = state.activeNucleusId) {
   if (!state.user) {
     dom.nucleusDropdown.classList.add('hidden');
     showToast('Inicia sesión para poder compartir este núcleo.');
     openAuthModal('login');
     return;
   }
-  const url = `${window.location.origin}${window.location.pathname}?join=${state.activeNucleusId}`;
+  const url = `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(nucleusId)}`;
   navigator.clipboard.writeText(url).then(() => {
     showToast('¡Enlace de invitación copiado al portapapeles!');
     dom.nucleusDropdown.classList.add('hidden');
@@ -1913,6 +1969,7 @@ function normalizeText(str) {
 function initSearch() {
   window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'f') {
+      if (isHomeOpen()) return;
       // segundo Ctrl+F con el buscador ya activo → buscador del navegador
       if (!dom.searchBox.classList.contains('hidden') && document.activeElement === dom.searchInput) return;
       e.preventDefault();
@@ -2233,9 +2290,15 @@ async function loadUserCloudData() {
   if (nuclei && nuclei.length > 0) {
     const prev = state.activeNucleusId;
     const pick = nuclei.find((n) => n.id === joinedId)
+      || nuclei.find((n) => n.id === hashNucleusId())
       || nuclei.find((n) => n.id === prev)
       || nuclei[0];
     state.nucleiList = nuclei;
+    if (pick.id !== prev) {
+      state.participantsByNucleus[prev] = state.participants;
+      const cached = state.participantsByNucleus[pick.id];
+      state.participants = Array.isArray(cached) ? cached : [];
+    }
     state.activeNucleusId = pick.id;
     state.activeNucleus = pick;
     saveLocalState();
@@ -2259,6 +2322,8 @@ async function loadUserCloudData() {
   }
   updateNucleusUI();
   listenToNucleusRealtime(state.activeNucleusId);
+  if (joinedId) openNucleus(joinedId);
+  else route();
 }
 
 function listenToNucleusRealtime(nucleusId) {
@@ -2271,11 +2336,179 @@ function listenToNucleusRealtime(nucleusId) {
       const entry = state.nucleiList.find((n) => n.id === nucleusId);
       if (entry) { entry.name = nucleusData.name; entry.circles = nucleusData.circles; }
     }
-    if (participantsData) state.participants = participantsData;
+    if (participantsData) {
+      state.participants = participantsData;
+      state.participantsByNucleus[nucleusId] = participantsData;
+    }
     renderCanvas();
     renderParticipantsList();
     updateNucleusUI();
   });
+}
+
+// ---- Página de inicio: todos los núcleos ----
+// La dirección decide qué se ve: «#n/<id>» abre ese núcleo; sin nada, el inicio.
+function hashNucleusId() {
+  const h = window.location.hash;
+  if (!h.startsWith('#n/')) return null;
+  try { return decodeURIComponent(h.slice(3)); } catch (_) { return null; }
+}
+
+function isHomeOpen() {
+  return document.documentElement.classList.contains('home-open');
+}
+
+function openNucleus(id) {
+  const hash = '#n/' + encodeURIComponent(id);
+  if (window.location.hash === hash) route();
+  else window.location.hash = hash; // → hashchange → route()
+}
+
+function goHome() {
+  if (window.location.hash) {
+    history.pushState(null, '', window.location.pathname + window.location.search);
+  }
+  route();
+}
+
+function route() {
+  const id = hashNucleusId();
+  if (id && state.nucleiList.some((n) => n.id === id)) {
+    switchNucleus(id);
+    document.documentElement.classList.remove('home-open');
+    document.title = `${state.activeNucleus.name} · Círculos`;
+    requestAnimationFrame(() => renderCanvas());
+  } else {
+    if (!isHomeOpen()) {
+      closeEverything();
+      leaveCurrentNucleus();
+    }
+    document.documentElement.classList.add('home-open');
+    document.title = 'Círculos Concéntricos';
+    renderHome();
+    refreshHomeCounts();
+  }
+}
+
+function openNewNucleusModal() {
+  dom.nucleusDropdown.classList.add('hidden');
+  closeOptionsMenu();
+  dom.modalNewNucleus.classList.remove('hidden');
+  dom.inputNewNucleusName.focus();
+}
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+function safeColor(c) { return HEX_COLOR.test(c || '') ? c : '#888888'; }
+
+function nucleusParticipants(id) {
+  const list = id === state.activeNucleusId ? state.participants : state.participantsByNucleus[id];
+  return Array.isArray(list) ? list.filter((p) => !p.archived) : null;
+}
+
+// Miniatura: los círculos del núcleo y un punto por persona en su sitio
+function nucleusThumbSvg(n, people) {
+  const circles = (n.id === state.activeNucleus.id && state.activeNucleus.circles) || n.circles || defaultCircles();
+  const R = 40, cx = 80, cy = 50;
+  let out = `<svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`;
+  for (let i = circles.length - 1; i >= 0; i--) {
+    const c = safeColor(circles[i].color);
+    const r = R * (i + 1) / circles.length;
+    out += `<circle cx="${cx}" cy="${cy}" r="${r.toFixed(2)}" style="fill:${c};fill-opacity:var(--ring-opacity, .07);stroke:${c};stroke-opacity:.6" stroke-width="0.8"/>`;
+  }
+  (people || []).slice(0, 400).forEach((p) => {
+    const x = cx + (Number(p.normX) || 0) * R;
+    const y = cy + (Number(p.normY) || 0) * R;
+    const circle = circles[p.circleIndex];
+    const fill = circle ? safeColor(circle.color) : 'var(--text-faint)';
+    out += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.9" style="fill:${fill}"/>`;
+  });
+  return out + '</svg>';
+}
+
+function renderHome() {
+  if (!dom.homeGrid) return;
+  dom.homeSub.textContent = state.user
+    ? `Sesión iniciada como ${state.user.email} · se sincronizan entre dispositivos`
+    : 'Guardados en este navegador · inicia sesión en Opciones para sincronizarlos';
+
+  const icon = {
+    rename: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.59 3.59a2 2 0 012.82 2.82l-8.5 8.5a1 1 0 01-.46.26l-3.2.8a.5.5 0 01-.6-.6l.8-3.2a1 1 0 01.26-.46l8.5-8.5z"/></svg>',
+    share: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/></svg>'
+  };
+
+  const cards = state.nucleiList.map((n) => {
+    const people = nucleusParticipants(n.id);
+    const count = people ? `${people.length} ${people.length === 1 ? 'persona' : 'personas'}` : '…';
+    const shared = state.user && n.ownerId && n.ownerId !== state.user.uid
+      ? '<span class="home-card-tag">Compartido contigo</span>' : '';
+    const name = escapeHtml(n.name || 'Sin nombre');
+    return `
+      <div class="home-card" role="button" tabindex="0" data-id="${escapeHtml(n.id)}" aria-label="Abrir ${name}">
+        <div class="home-card-art">${nucleusThumbSvg(n, people)}</div>
+        <div class="home-card-text">
+          <div class="home-card-name" title="${name}">${name}</div>
+          <div class="home-card-meta"><span>${count}</span>${shared}</div>
+        </div>
+        <div class="home-card-actions">
+          <button type="button" class="home-card-btn" data-action="rename" title="Renombrar" aria-label="Renombrar ${name}">${icon.rename}</button>
+          <button type="button" class="home-card-btn" data-action="share" title="Copiar enlace de invitación" aria-label="Copiar enlace de invitación de ${name}">${icon.share}</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  dom.homeGrid.innerHTML = cards + `
+    <button type="button" class="home-card home-new" data-action="new">
+      <span class="home-new-plus">+</span>
+      Nuevo núcleo
+    </button>`;
+}
+
+// Cuenta las personas de los núcleos que aún no tenemos en memoria (en la nube)
+let homeCountsLoading = false;
+async function refreshHomeCounts() {
+  if (!state.user || homeCountsLoading) return;
+  homeCountsLoading = true;
+  try {
+    await Promise.all(state.nucleiList.map(async (n) => {
+      if (n.id === state.activeNucleusId) return;
+      try {
+        const list = await fetchParticipants(n.id);
+        if (Array.isArray(list)) state.participantsByNucleus[n.id] = list;
+      } catch (err) {
+        console.warn('No se pudieron leer los participantes de', n.id, err);
+      }
+    }));
+  } finally {
+    homeCountsLoading = false;
+  }
+  if (isHomeOpen()) renderHome();
+}
+
+function initHome() {
+  dom.homeGrid.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    const card = e.target.closest('.home-card');
+    if (!card) return;
+    if (btn && btn.dataset.action === 'new') { openNewNucleusModal(); return; }
+    const id = card.dataset.id;
+    if (btn && btn.dataset.action === 'rename') { e.stopPropagation(); openRenameNucleus(id); return; }
+    if (btn && btn.dataset.action === 'share') { e.stopPropagation(); copyInviteLink(id); return; }
+    openNucleus(id);
+  });
+  dom.homeGrid.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('home-card') && e.target.dataset.id) {
+      e.preventDefault();
+      openNucleus(e.target.dataset.id);
+    }
+  });
+  dom.btnHome.addEventListener('click', goHome);
+  dom.btnAllNuclei.addEventListener('click', () => {
+    dom.nucleusDropdown.classList.add('hidden');
+    goHome();
+  });
+  window.addEventListener('hashchange', route);
+  window.addEventListener('popstate', route);
+  route();
 }
 
 function showToast(message) {

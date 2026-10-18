@@ -154,3 +154,11 @@ export async function joinNucleusByInvite(nucleusId, userId) {
     { id: nucleusId, name }, { merge: true });
   return name;
 }
+
+/* --- Lectura puntual (para la página de inicio) ------------------------ */
+
+export async function fetchParticipants(nucleusId) {
+  if (!db) return null;
+  const qs = await fb.getDocs(fb.collection(db, "nuclei", nucleusId, "participants"));
+  return qs.docs.map((d) => d.data());
+}

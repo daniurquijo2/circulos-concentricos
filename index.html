@@ -16,6 +16,10 @@
       document.documentElement.setAttribute('data-theme', t);
       var bg; try { bg = localStorage.getItem('circulos_canvas_bg_' + t); } catch (e) {}
       if (bg && /^#[0-9a-f]{6}$/i.test(bg)) document.documentElement.style.setProperty('--canvas-bg', bg);
+      var hbg; try { hbg = localStorage.getItem('circulos_home_bg_' + t); } catch (e) {}
+      if (hbg && /^#[0-9a-f]{6}$/i.test(hbg)) document.documentElement.style.setProperty('--home-bg', hbg);
+      // abrir directamente en el inicio salvo que la dirección apunte a un núcleo
+      if (location.hash.indexOf('#n/') !== 0) document.documentElement.classList.add('home-open');
       var cbg; try { cbg = localStorage.getItem('circulos_circles_bg_' + t); } catch (e) {}
       if (cbg && /^#[0-9a-f]{6}$/i.test(cbg)) document.documentElement.style.setProperty('--circles-bg', cbg);
       [['ring_opacity', '--ring-opacity'], ['glow', '--glow-strength'], ['grid', '--grid-strength']].forEach(function (p) {
@@ -25,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=202610172307" />
+  <link rel="stylesheet" href="style.css?v=202610181803" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -33,17 +37,61 @@
 </head>
 <body>
   <div id="app">
+    <!-- PÁGINA DE INICIO: todos los núcleos -->
+    <section id="home-view" class="home-view" aria-label="Inicio">
+      <header class="home-head">
+        <div class="brand">
+          <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <circle cx="24" cy="24" r="20" style="stroke: var(--logo-mid)" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="0 6.283"/>
+            <circle cx="24" cy="24" r="13" style="stroke: var(--logo-strong)" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="0 6.807"/>
+            <circle cx="24" cy="24" r="5.2" style="fill: var(--logo-core)"/>
+          </svg>
+          <span class="brand-name">Círculos</span>
+        </div>
+        <div class="home-tools">
+          <div class="home-theme" role="radiogroup" aria-label="Tema">
+            <button type="button" class="home-theme-btn" data-mode="dark" role="radio" aria-checked="false" title="Modo oscuro">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M17.29 13.29A8 8 0 016.71 2.71a8 8 0 1010.58 10.58z"/></svg>
+              <span>Oscuro</span>
+            </button>
+            <button type="button" class="home-theme-btn" data-mode="light" role="radio" aria-checked="false" title="Modo claro">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.46 4.95l.7.7a1 1 0 001.42-1.4l-.71-.71a1 1 0 00-1.41 1.41zm2.12-10.6a1 1 0 010 1.41l-.7.7a1 1 0 11-1.42-1.4l.71-.71a1 1 0 011.41 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.46a1 1 0 001.41-1.41l-.7-.71a1 1 0 00-1.42 1.41l.71.71zm1.41 8.49l-.7.7a1 1 0 01-1.42-1.4l.71-.71a1 1 0 011.41 1.41zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"/></svg>
+              <span>Claro</span>
+            </button>
+          </div>
+          <span class="cz-color-field home-bg-field">
+            <button type="button" class="home-bg-btn" title="Color de fondo del inicio" aria-label="Color de fondo del inicio">
+              <span class="home-bg-swatch" data-swatch></span>
+              <span>Fondo</span>
+            </button>
+            <input type="color" id="home-bg-input" value="#0b0d10" hidden />
+          </span>
+          <button type="button" id="home-bg-reset" class="cz-reset" title="Restablecer el fondo" aria-label="Restablecer el fondo del inicio">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a6 6 0 106-6H7"/><path d="M8.5 1.5L6 4l2.5 2.5"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="home-body">
+        <div class="home-intro">
+          <h1 class="home-title">Tus núcleos</h1>
+          <p id="home-sub" class="home-sub"></p>
+        </div>
+        <div id="home-grid" class="home-grid"></div>
+      </div>
+    </section>
+
     <!-- BARRA SUPERIOR -->
     <header class="top-bar">
       <div class="top-bar-left">
-      <div class="brand">
+      <button type="button" id="btn-home" class="brand brand-btn" title="Inicio · todos los núcleos" aria-label="Volver al inicio">
+        <svg class="brand-back" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.7 4.3a1 1 0 010 1.4L8.42 10l4.3 4.3a1 1 0 01-1.42 1.4l-5-5a1 1 0 010-1.4l5-5a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>
         <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
           <circle cx="24" cy="24" r="20" style="stroke: var(--logo-mid)" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="0 6.283"/>
           <circle cx="24" cy="24" r="13" style="stroke: var(--logo-strong)" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="0 6.807"/>
           <circle cx="24" cy="24" r="5.2" style="fill: var(--logo-core)"/>
         </svg>
         <span class="brand-name">Círculos</span>
-      </div>
+      </button>
 
       <div class="bar-divider"></div>
 
@@ -60,6 +108,10 @@
           <div class="dropdown-header">Tus Núcleos</div>
           <ul id="nucleus-list" class="nucleus-list"></ul>
           <div class="dropdown-divider"></div>
+          <button id="btn-all-nuclei" class="dropdown-action-btn">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon"><path d="M3 4a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm8 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V4zm-8 8a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H4a1 1 0 01-1-1v-4zm8 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
+            Ver todos en el inicio
+          </button>
           <button id="btn-new-nucleus" class="dropdown-action-btn">
             <span>+</span> Nuevo núcleo
           </button>
@@ -437,7 +489,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="app.js?v=202610172307"></script>
+  <script type="module" src="app.js?v=202610181803"></script>
   <script>
   (function () {
     const menu = document.getElementById('side-menu');
@@ -556,6 +608,7 @@
         return '#' + m.slice(0, 3).map(function (n) { return (+n).toString(16).padStart(2, '0'); }).join('').toUpperCase();
       }
       var bgSettings = [
+        { key: 'home_bg', cssVar: '--home-bg', id: 'home-bg', fallback: function () { return getComputedStyle(root).getPropertyValue('--bg-app'); } },
         { key: 'canvas_bg', cssVar: '--canvas-bg', id: 'canvas-bg', fallback: function () { return getComputedStyle(root).getPropertyValue('--bg-app'); } },
         { key: 'circles_bg', cssVar: '--circles-bg', id: 'circles-bg', fallback: function () {
             var s = root.style.getPropertyValue('--canvas-bg');
@@ -577,6 +630,8 @@
           var saved = root.style.getPropertyValue(s.cssVar).trim();
           var shown = toHex(saved || s.fallback());
           if (input) input.value = shown.toLowerCase();
+          var sw = input && input.parentElement.querySelector('[data-swatch]');
+          if (sw) sw.style.background = shown;
           if (hex) hex.textContent = shown;
           if (reset) reset.style.visibility = saved ? 'visible' : 'hidden';
         });
@@ -611,8 +666,19 @@
         try { localStorage.setItem('circulos_theme', t); } catch (e) {}
         apply(t);
       };
+      var homeThemeBtns = document.querySelectorAll('.home-theme-btn');
+      homeThemeBtns.forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (b.dataset.mode !== (root.getAttribute('data-theme') || 'dark')) window.__setTheme(b.dataset.mode);
+        });
+      });
       function apply(t) {
         root.setAttribute('data-theme', t);
+        homeThemeBtns.forEach(function (b) {
+          var on = b.dataset.mode === t;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
         applyNums(t);
         applyBgs(t);
         if (label) label.textContent = t === 'light' ? 'Modo nocturno' : 'Modo diurno';
@@ -952,6 +1018,12 @@
         var chip = e.target.closest('.cz-chip');
         if (!chip) return;
         var f = chip.closest('.cz-color-field');
+        if (anchor === f) closePicker(); else openPicker(f);
+      });
+      document.getElementById('home-view').addEventListener('click', function (e) {
+        var b = e.target.closest('.home-bg-btn');
+        if (!b) return;
+        var f = b.closest('.cz-color-field');
         if (anchor === f) closePicker(); else openPicker(f);
       });
       document.addEventListener('pointerdown', function (e) {
