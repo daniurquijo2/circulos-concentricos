@@ -12,7 +12,7 @@ import {
   joinNucleusByInvite,
   renameNucleusDoc,
   fetchParticipants
-} from './firebase-config.js?v=202610181813';
+} from './firebase-config.js?v=202610181814';
 
 export const state = {
   user: null,
@@ -112,7 +112,6 @@ const dom = {
   btnToggleAuthMode: document.getElementById('btn-toggle-auth-mode'),
   authToggleText: document.getElementById('auth-toggle-text'),
   toast: document.getElementById('toast'),
-  btnRenameNucleus: document.getElementById('btn-rename-nucleus'),
   modalRenameNucleus: document.getElementById('modal-rename-nucleus'),
   formRenameNucleus: document.getElementById('form-rename-nucleus'),
   inputRenameNucleus: document.getElementById('input-rename-nucleus'),
@@ -221,7 +220,6 @@ function initEventListeners() {
 
   dom.btnShareNucleus.addEventListener('click', () => copyInviteLink());
 
-  dom.btnRenameNucleus.addEventListener('click', () => openRenameNucleus(state.activeNucleusId));
   dom.formRenameNucleus.addEventListener('submit', (e) => {
     e.preventDefault();
     closeModal(dom.modalRenameNucleus);
