@@ -230,11 +230,9 @@ a:hover { color: var(--link-hover); }
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .nucleus-rename-btn svg { width: 13px; height: 13px; }
-.nucleus-list li:hover .nucleus-rename-btn, .nucleus-rename-btn:focus-visible { opacity: 1; }
 .nucleus-rename-btn:hover { background: var(--bg-raise); color: var(--text-main); }
 .dropdown-note { padding: 4px 12px 6px; font-size: 11.5px; line-height: 1.45; color: var(--text-faint); }
 

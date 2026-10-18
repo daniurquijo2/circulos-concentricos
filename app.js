@@ -12,7 +12,7 @@ import {
   joinNucleusByInvite,
   renameNucleusDoc,
   fetchParticipants
-} from './firebase-config.js?v=202610181807';
+} from './firebase-config.js?v=202610181813';
 
 export const state = {
   user: null,
@@ -2367,7 +2367,7 @@ function openNucleus(id) {
 
 function goHome() {
   if (window.location.hash) {
-    history.pushState(null, '', window.location.pathname + window.location.search);
+    window.history.pushState(null, '', window.location.pathname + window.location.search);
   }
   route();
 }
