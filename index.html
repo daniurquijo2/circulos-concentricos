@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=202610191116" />
+  <link rel="stylesheet" href="style.css?v=202610191134" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -501,10 +501,89 @@
       </div>
     </div>
 
+    <div id="modal-profile" class="modal-overlay hidden">
+      <div class="modal-card profile-modal" role="dialog" aria-labelledby="profile-title">
+        <h3 id="profile-title">Tu perfil</h3>
+        <p>Pulsa el lápiz para cambiar un dato. Se guarda con Intro.</p>
+
+        <div class="profile-row" data-field="username">
+          <div class="profile-view">
+            <div class="profile-text">
+              <span class="profile-label">Usuario</span>
+              <span class="profile-value" id="profile-username"></span>
+            </div>
+            <button type="button" class="profile-edit-btn" data-edit="username" title="Cambiar usuario" aria-label="Cambiar usuario"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.59 3.59a2 2 0 012.82 2.82l-8.5 8.5a1 1 0 01-.46.26l-3.2.8a.5.5 0 01-.6-.6l.8-3.2a1 1 0 01.26-.46l8.5-8.5z"/></svg></button>
+          </div>
+          <form class="profile-form hidden" data-form="username">
+            <span class="profile-label">Nuevo usuario</span>
+            <input type="text" name="username" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false" data-username-input />
+            <span class="field-hint">3–20 caracteres: minúsculas, números, punto o guion bajo · Intro para guardar, Esc para cancelar</span>
+            <div class="error-msg hidden" data-error></div>
+            <button type="submit" hidden></button>
+          </form>
+        </div>
+
+        <div class="profile-row" data-field="email">
+          <div class="profile-view">
+            <div class="profile-text">
+              <span class="profile-label">Correo</span>
+              <span class="profile-value" id="profile-email"></span>
+            </div>
+            <button type="button" class="profile-edit-btn" data-edit="email" title="Cambiar correo" aria-label="Cambiar correo"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.59 3.59a2 2 0 012.82 2.82l-8.5 8.5a1 1 0 01-.46.26l-3.2.8a.5.5 0 01-.6-.6l.8-3.2a1 1 0 01.26-.46l8.5-8.5z"/></svg></button>
+          </div>
+          <form class="profile-form hidden" data-form="email">
+            <span class="profile-label">Nuevo correo</span>
+            <input type="email" name="email" autocomplete="email" />
+            <span class="profile-label">Contraseña actual</span>
+            <input type="password" name="current" autocomplete="current-password" />
+            <span class="field-hint">Te llegará un correo a la dirección nueva: el cambio se aplica al confirmarlo · Intro para enviar</span>
+            <div class="error-msg hidden" data-error></div>
+            <button type="submit" hidden></button>
+          </form>
+        </div>
+
+        <div class="profile-row" data-field="password">
+          <div class="profile-view">
+            <div class="profile-text">
+              <span class="profile-label">Contraseña</span>
+              <span class="profile-value profile-dots">••••••••••</span>
+            </div>
+            <button type="button" class="profile-edit-btn" data-edit="password" title="Cambiar contraseña" aria-label="Cambiar contraseña"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.59 3.59a2 2 0 012.82 2.82l-8.5 8.5a1 1 0 01-.46.26l-3.2.8a.5.5 0 01-.6-.6l.8-3.2a1 1 0 01.26-.46l8.5-8.5z"/></svg></button>
+          </div>
+          <form class="profile-form hidden" data-form="password">
+            <span class="profile-label">Contraseña actual</span>
+            <input type="password" name="current" autocomplete="current-password" />
+            <span class="profile-label">Contraseña nueva</span>
+            <input type="password" name="next" autocomplete="new-password" placeholder="Mínimo 6 caracteres" />
+            <span class="field-hint">Intro para guardar, Esc para cancelar</span>
+            <div class="error-msg hidden" data-error></div>
+            <button type="submit" hidden></button>
+          </form>
+        </div>
+
+        <div class="profile-actions" id="profile-actions">
+          <button type="button" class="btn-cancel" id="btn-profile-logout">Cerrar sesión</button>
+          <button type="button" class="btn-danger" id="btn-profile-delete">Borrar cuenta</button>
+        </div>
+
+        <form class="profile-delete hidden" id="profile-delete-form">
+          <strong>¿Borrar tu cuenta definitivamente?</strong>
+          <span>Se borrarán tu cuenta, tu usuario y los núcleos que has creado tú (también para las personas con las que los compartes). De los núcleos que otros te compartieron solo se te quitará el acceso. No se puede deshacer.</span>
+          <span class="profile-label">Escribe tu contraseña para confirmar</span>
+          <input type="password" id="profile-delete-password" autocomplete="current-password" />
+          <div class="error-msg hidden" id="profile-delete-error"></div>
+          <div class="profile-actions">
+            <button type="button" class="btn-cancel" id="btn-profile-delete-cancel">No, volver</button>
+            <button type="submit" class="btn-danger" id="btn-profile-delete-confirm">Borrar definitivamente</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="app.js?v=202610191116"></script>
+  <script type="module" src="app.js?v=202610191134"></script>
   <script>
   (function () {
     const menu = document.getElementById('side-menu');

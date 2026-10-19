@@ -142,6 +142,115 @@ export async function logoutUser() {
   return await fb.signOut(auth);
 }
 
+/* --- Perfil: cambiar usuario, correo, contraseña; borrar cuenta -------- */
+
+async function reauth(password) {
+  const user = auth.currentUser;
+  const cred = fb.EmailAuthProvider.credential(user.email, password);
+  await fb.reauthenticateWithCredential(user, cred);
+}
+
+export async function changeUsername(newUsername) {
+  if (!db || !auth || !auth.currentUser) throw new Error("Inicia sesión primero.");
+  const name = normalizeUsername(newUsername);
+  if (!USERNAME_RE.test(name)) {
+    const err = new Error("El usuario debe tener de 3 a 20 caracteres: letras minúsculas, números, punto o guion bajo.");
+    err.code = "app/username-invalid";
+    throw err;
+  }
+  const user = auth.currentUser;
+  const profileRef = fb.doc(db, "profiles", user.uid);
+  const newRef = fb.doc(db, "usernames", name);
+  await fb.runTransaction(db, async (tx) => {
+    const prof = await tx.get(profileRef);
+    const old = prof.exists() ? prof.data().username : null;
+    if (old === name) return;
+    const taken = await tx.get(newRef);
+    if (taken.exists() && taken.data().uid !== user.uid) {
+      const err = new Error("Ese nombre de usuario ya está cogido.");
+      err.code = "app/username-taken";
+      throw err;
+    }
+    if (!taken.exists()) tx.set(newRef, { uid: user.uid, email: user.email, username: name });
+    tx.set(profileRef, { username: name });
+    if (old) tx.delete(fb.doc(db, "usernames", old));
+  });
+  return name;
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  if (!auth || !auth.currentUser) throw new Error("Inicia sesión primero.");
+  await reauth(currentPassword);
+  await fb.updatePassword(auth.currentUser, newPassword);
+}
+
+// Firebase manda un correo a la dirección nueva; el cambio se aplica al confirmarlo.
+export async function changeEmail(newEmail, currentPassword) {
+  if (!auth || !auth.currentUser) throw new Error("Inicia sesión primero.");
+  await reauth(currentPassword);
+  await fb.verifyBeforeUpdateEmail(auth.currentUser, newEmail);
+}
+
+// Si el correo de la cuenta cambió, actualizar la ficha del usuario para poder seguir entrando con él
+export async function syncUsernameEmail(username) {
+  if (!db || !auth || !auth.currentUser || !username) return;
+  const user = auth.currentUser;
+  const ref = fb.doc(db, "usernames", username);
+  try {
+    const snap = await fb.getDoc(ref);
+    if (snap.exists() && snap.data().uid === user.uid && snap.data().email !== user.email) {
+      await fb.setDoc(ref, { uid: user.uid, email: user.email, username });
+    }
+  } catch (err) {
+    console.warn("No se pudo actualizar el correo del usuario", err);
+  }
+}
+
+// Borra la cuenta: los núcleos propios (con todo su contenido), su sitio en los
+// núcleos compartidos, el nombre de usuario y, por último, la cuenta de acceso.
+export async function deleteAccount(currentPassword, onProgress = () => {}) {
+  if (!db || !auth || !auth.currentUser) throw new Error("Inicia sesión primero.");
+  await reauth(currentPassword);
+  const user = auth.currentUser;
+  const uid = user.uid;
+
+  const index = await fb.getDocs(fb.collection(db, "users", uid, "nuclei"));
+  for (const entry of index.docs) {
+    const nid = entry.id;
+    onProgress(`Borrando núcleos…`);
+    try {
+      const snap = await fb.getDoc(fb.doc(db, "nuclei", nid));
+      if (snap.exists() && snap.data().ownerId === uid) {
+        const parts = await fb.getDocs(fb.collection(db, "nuclei", nid, "participants"));
+        await Promise.all(parts.docs.map((d) => fb.deleteDoc(d.ref)));
+        const members = await fb.getDocs(fb.collection(db, "nuclei", nid, "members"));
+        await Promise.all(members.docs.filter((d) => d.id !== uid).map(async (d) => {
+          await fb.deleteDoc(d.ref);
+          try { await fb.deleteDoc(fb.doc(db, "users", d.id, "nuclei", nid)); } catch (_) {}
+        }));
+        await fb.deleteDoc(fb.doc(db, "nuclei", nid, "members", uid));
+        await fb.deleteDoc(fb.doc(db, "nuclei", nid));
+      } else {
+        try { await fb.deleteDoc(fb.doc(db, "nuclei", nid, "members", uid)); } catch (_) {}
+      }
+    } catch (err) {
+      console.warn("No se pudo limpiar el núcleo", nid, err);
+    }
+    await fb.deleteDoc(entry.ref);
+  }
+
+  onProgress("Borrando el perfil…");
+  const prof = await fb.getDoc(fb.doc(db, "profiles", uid));
+  if (prof.exists()) {
+    const name = prof.data().username;
+    if (name) { try { await fb.deleteDoc(fb.doc(db, "usernames", name)); } catch (_) {} }
+    await fb.deleteDoc(prof.ref);
+  }
+
+  onProgress("Borrando la cuenta…");
+  await fb.deleteUser(user);
+}
+
 /* --- Lectura en tiempo real ------------------------------------------- */
 
 export function subscribeToNucleusData(nucleusId, callback) {

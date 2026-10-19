@@ -17,8 +17,13 @@ import {
   normalizeUsername,
   USERNAME_RE,
   listNucleusMembers,
-  removeNucleusMember
-} from './firebase-config.js?v=202610191116';
+  removeNucleusMember,
+  changeUsername,
+  changePassword,
+  changeEmail,
+  syncUsernameEmail,
+  deleteAccount
+} from './firebase-config.js?v=202610191134';
 
 export const state = {
   user: null,
@@ -126,6 +131,17 @@ const dom = {
   formUsername: document.getElementById('form-username'),
   inputUsername: document.getElementById('input-username'),
   usernameErrorMsg: document.getElementById('username-error-msg'),
+  modalProfile: document.getElementById('modal-profile'),
+  profileUsername: document.getElementById('profile-username'),
+  profileEmail: document.getElementById('profile-email'),
+  profileActions: document.getElementById('profile-actions'),
+  btnProfileLogout: document.getElementById('btn-profile-logout'),
+  btnProfileDelete: document.getElementById('btn-profile-delete'),
+  profileDeleteForm: document.getElementById('profile-delete-form'),
+  profileDeletePassword: document.getElementById('profile-delete-password'),
+  profileDeleteError: document.getElementById('profile-delete-error'),
+  btnProfileDeleteCancel: document.getElementById('btn-profile-delete-cancel'),
+  btnProfileDeleteConfirm: document.getElementById('btn-profile-delete-confirm'),
   modalShare: document.getElementById('modal-share'),
   shareTitle: document.getElementById('share-title'),
   shareMembers: document.getElementById('share-members'),
@@ -186,6 +202,7 @@ async function loadMyUsername(user) {
   if (state.user !== user) return;
   if (name) {
     state.username = name;
+    syncUsernameEmail(name);
     updateAuthUI();
     if (isHomeOpen()) renderHome();
   } else if (!state.registering) {
@@ -287,7 +304,8 @@ function initEventListeners() {
     e.preventDefault();
     if (await saveUsernameFromModal()) dom.modalUsername.classList.add('hidden');
   });
-  [dom.inputUsername, dom.authUsername].forEach((el) => el.addEventListener('input', () => {
+  initProfileModal();
+  [dom.inputUsername, dom.authUsername, ...document.querySelectorAll('[data-username-input]')].forEach((el) => el.addEventListener('input', () => {
     const v = el.value.toLowerCase().replace(/[^a-z0-9._]/g, '');
     if (v !== el.value) el.value = v;
   }));
@@ -2385,9 +2403,13 @@ function accountLabel() {
 }
 
 function updateAuthUI() {
+  const label = accountLabel();
+  const initial = (state.username || (state.user && state.user.email) || '?')[0].toUpperCase();
   const html = state.user
-    ? `<span class="account-email" title="${escapeHtml(state.user.email || '')}">${escapeHtml(accountLabel())}</span>
-       <button type="button" class="account-btn" data-auth="logout">Cerrar sesión</button>`
+    ? `<button type="button" class="account-user" data-auth="profile" title="Tu perfil · ${escapeHtml(state.user.email || '')}" aria-label="Abrir tu perfil">
+         <span class="account-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+         <span class="account-email">${escapeHtml(label)}</span>
+       </button>`
     : `<button type="button" class="account-btn" data-auth="login">Iniciar sesión</button>
        <button type="button" class="account-btn primary" data-auth="register">Crear cuenta</button>`;
   document.querySelectorAll('[data-account]').forEach((box) => { box.innerHTML = html; });
@@ -2396,14 +2418,158 @@ function updateAuthUI() {
 function handleAuthButtonClick(action) {
   closeOptionsMenu();
   if (action === 'logout') {
-    logoutUser();
-    state.user = null;
-    updateAuthUI();
-    if (isHomeOpen()) renderHome();
-    showToast('Sesión cerrada.');
+    doLogout();
+  } else if (action === 'profile') {
+    openProfileModal();
   } else {
     openAuthModal(action === 'register' ? 'register' : 'login');
   }
+}
+
+function doLogout() {
+  logoutUser();
+  state.user = null;
+  state.username = null;
+  updateAuthUI();
+  if (isHomeOpen()) renderHome();
+  showToast('Sesión cerrada.');
+}
+
+// ---- Perfil: usuario, correo y contraseña con su lápiz; cerrar sesión y borrar cuenta ----
+function resetProfileModal() {
+  dom.modalProfile.querySelectorAll('.profile-form').forEach((f) => {
+    f.classList.add('hidden');
+    f.reset();
+    const e = f.querySelector('[data-error]');
+    if (e) e.classList.add('hidden');
+  });
+  dom.modalProfile.querySelectorAll('.profile-view').forEach((v) => v.classList.remove('hidden'));
+  dom.profileDeleteForm.classList.add('hidden');
+  dom.profileDeleteForm.reset();
+  dom.profileDeleteError.classList.add('hidden');
+  dom.profileActions.classList.remove('hidden');
+  dom.btnProfileDeleteConfirm.disabled = false;
+  dom.btnProfileDeleteConfirm.textContent = 'Borrar definitivamente';
+}
+
+function fillProfileModal() {
+  dom.profileUsername.textContent = state.username ? '@' + state.username : 'Sin elegir';
+  dom.profileUsername.classList.toggle('empty', !state.username);
+  dom.profileEmail.textContent = (state.user && state.user.email) || '';
+}
+
+function openProfileModal() {
+  if (!state.user) { openAuthModal('login'); return; }
+  closeOptionsMenu();
+  resetProfileModal();
+  fillProfileModal();
+  dom.modalProfile.classList.remove('hidden');
+}
+
+function editProfileField(field) {
+  resetProfileModal();
+  const row = dom.modalProfile.querySelector(`.profile-row[data-field="${field}"]`);
+  row.querySelector('.profile-view').classList.add('hidden');
+  const form = row.querySelector('.profile-form');
+  form.classList.remove('hidden');
+  if (field === 'username' && state.username) form.elements.username.value = state.username;
+  if (field === 'email') form.elements.email.value = '';
+  const first = form.querySelector('input');
+  first.focus();
+  first.select();
+}
+
+async function submitProfileField(form) {
+  const field = form.dataset.form;
+  const errBox = form.querySelector('[data-error]');
+  errBox.classList.add('hidden');
+  const showErr = (msg) => { errBox.textContent = msg; errBox.classList.remove('hidden'); };
+  try {
+    if (field === 'username') {
+      const name = normalizeUsername(form.elements.username.value);
+      if (!name || name === state.username) { resetProfileModal(); return; }
+      state.username = await changeUsername(name);
+      updateAuthUI();
+      if (isHomeOpen()) renderHome();
+      showToast(`Ahora tu usuario es @${state.username}`);
+    } else if (field === 'email') {
+      const email = form.elements.email.value.trim();
+      const current = form.elements.current.value;
+      if (!email) { resetProfileModal(); return; }
+      if (email.toLowerCase() === (state.user.email || '').toLowerCase()) { resetProfileModal(); return; }
+      if (!current) { showErr('Escribe tu contraseña actual.'); form.elements.current.focus(); return; }
+      await changeEmail(email, current);
+      showToast(`Te hemos enviado un correo a ${email}. El cambio se aplica al confirmarlo; después vuelve a iniciar sesión.`);
+    } else if (field === 'password') {
+      const current = form.elements.current.value;
+      const next = form.elements.next.value;
+      if (!current) { showErr('Escribe tu contraseña actual.'); form.elements.current.focus(); return; }
+      if (next.length < 6) { showErr('La contraseña nueva debe tener al menos 6 caracteres.'); form.elements.next.focus(); return; }
+      await changePassword(current, next);
+      showToast('Contraseña cambiada.');
+    }
+    resetProfileModal();
+    fillProfileModal();
+  } catch (err) {
+    console.error(err);
+    showErr(profileErrorText(err));
+  }
+}
+
+function profileErrorText(err) {
+  const code = (err && err.code) || '';
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') return 'La contraseña actual no es correcta.';
+  if (code === 'auth/requires-recent-login') return 'Por seguridad, cierra sesión y vuelve a entrar antes de hacer este cambio.';
+  if (code === 'auth/operation-not-allowed') return 'Firebase no permite cambiar el correo con la configuración actual.';
+  return authErrorText(err);
+}
+
+async function confirmDeleteAccount() {
+  const password = dom.profileDeletePassword.value;
+  dom.profileDeleteError.classList.add('hidden');
+  if (!password) {
+    dom.profileDeleteError.textContent = 'Escribe tu contraseña para confirmar.';
+    dom.profileDeleteError.classList.remove('hidden');
+    return;
+  }
+  dom.btnProfileDeleteConfirm.disabled = true;
+  try {
+    if (state.unsubscribeNucleus) { state.unsubscribeNucleus(); state.unsubscribeNucleus = null; }
+    await deleteAccount(password, (msg) => { dom.btnProfileDeleteConfirm.textContent = msg; });
+    try { localStorage.removeItem('circulos_state'); } catch (_) {}
+    dom.modalProfile.classList.add('hidden');
+    showToast('Cuenta borrada.');
+    setTimeout(() => { window.location.href = window.location.pathname; }, 900);
+  } catch (err) {
+    console.error(err);
+    dom.btnProfileDeleteConfirm.disabled = false;
+    dom.btnProfileDeleteConfirm.textContent = 'Borrar definitivamente';
+    dom.profileDeleteError.textContent = profileErrorText(err);
+    dom.profileDeleteError.classList.remove('hidden');
+    if (state.user && state.activeNucleusId) listenToNucleusRealtime(state.activeNucleusId);
+  }
+}
+
+function initProfileModal() {
+  dom.modalProfile.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-edit]');
+    if (b) editProfileField(b.dataset.edit);
+  });
+  dom.modalProfile.querySelectorAll('.profile-form').forEach((form) => {
+    form.addEventListener('submit', (e) => { e.preventDefault(); submitProfileField(form); });
+  });
+  dom.btnProfileLogout.addEventListener('click', () => {
+    dom.modalProfile.classList.add('hidden');
+    doLogout();
+  });
+  dom.btnProfileDelete.addEventListener('click', () => {
+    resetProfileModal();
+    dom.profileActions.classList.add('hidden');
+    dom.profileDeleteForm.classList.remove('hidden');
+    dom.profileDeletePassword.focus();
+  });
+  dom.btnProfileDeleteCancel.addEventListener('click', resetProfileModal);
+  dom.profileDeleteForm.addEventListener('submit', (e) => { e.preventDefault(); confirmDeleteAccount(); });
 }
 
 function openAuthModal(mode = 'login') {

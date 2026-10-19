@@ -33,7 +33,12 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.username == name;
-      allow update: if false;
+      // Solo para mantener al día el correo si la cuenta lo cambia.
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.username == name;
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
@@ -44,7 +49,7 @@ service cloud.firestore {
       allow create, update: if signedIn() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['username'])
         && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid;
-      allow delete: if false;
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
 
     match /nuclei/{nucleusId} {
