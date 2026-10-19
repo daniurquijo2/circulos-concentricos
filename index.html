@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=202610181814" />
+  <link rel="stylesheet" href="style.css?v=202610191116" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -96,11 +96,11 @@
           </button>
           <button id="btn-share-nucleus" class="dropdown-action-btn share-btn">
             <svg viewBox="0 0 20 20" fill="currentColor" class="action-icon">
-              <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/>
+              <circle cx="8" cy="7" r="3.2"/><path d="M2 16.5c0-3 2.7-5 6-5s6 2 6 5v.5H2z"/><path d="M15.5 2.5a.75.75 0 01.75.75V5h1.75a.75.75 0 010 1.5h-1.75v1.75a.75.75 0 01-1.5 0V6.5H13a.75.75 0 010-1.5h1.75V3.25a.75.75 0 01.75-.75z"/>
             </svg>
-            Copiar enlace de invitación
+            Compartir este núcleo
           </button>
-          <p class="dropdown-note">Cada núcleo tiene su propio enlace: quien lo abra verá y podrá editar solo este núcleo.</p>
+          <p class="dropdown-note">Mira quién tiene acceso y copia el enlace de invitación. Cada núcleo tiene el suyo.</p>
         </div>
       </div>
       </div>
@@ -450,12 +450,17 @@
         <p id="auth-modal-desc">Accede a tus círculos desde cualquier dispositivo.</p>
         <form id="form-auth">
           <div class="form-group">
-            <label for="auth-email">Correo electrónico</label>
-            <input type="email" id="auth-email" placeholder="ejemplo@correo.com" required />
+            <label for="auth-email" id="auth-email-label">Correo o nombre de usuario</label>
+            <input type="text" id="auth-email" placeholder="ejemplo@correo.com o tu usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required />
+          </div>
+          <div class="form-group hidden" id="auth-username-group">
+            <label for="auth-username">Nombre de usuario</label>
+            <input type="text" id="auth-username" placeholder="p. ej. dani.u" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false" />
+            <span class="field-hint">3–20 caracteres: minúsculas, números, punto o guion bajo. Es lo que verán los demás.</span>
           </div>
           <div class="form-group">
             <label for="auth-password">Contraseña</label>
-            <input type="password" id="auth-password" placeholder="Mínimo 6 caracteres" required />
+            <input type="password" id="auth-password" placeholder="Mínimo 6 caracteres" autocomplete="current-password" required />
           </div>
           <div id="auth-error-msg" class="error-msg hidden"></div>
           <button type="submit" id="auth-submit-btn" class="btn-primary full-width">Entrar</button>
@@ -468,10 +473,38 @@
       </div>
     </div>
 
+    <div id="modal-username" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3>Elige tu nombre de usuario</h3>
+        <p>Es lo que verán las personas con las que compartes núcleos, y también te servirá para iniciar sesión en lugar del correo.</p>
+        <form id="form-username">
+          <input type="text" id="input-username" placeholder="p. ej. dani.u" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false" />
+          <div id="username-error-msg" class="error-msg hidden"></div>
+          <span class="field-hint">3–20 caracteres: minúsculas, números, punto o guion bajo · se guarda con Intro</span>
+        </form>
+      </div>
+    </div>
+
+    <div id="modal-share" class="modal-overlay hidden">
+      <div class="modal-card share-modal" role="dialog" aria-labelledby="share-title">
+        <h3 id="share-title">Compartir</h3>
+        <p>Quien tenga acceso puede ver y editar este núcleo.</p>
+        <div class="share-section-title">Personas con acceso</div>
+        <ul id="share-members" class="share-members"></ul>
+        <div class="share-section-title">Enlace de invitación</div>
+        <div class="share-link-row">
+          <input type="text" id="share-link-input" readonly aria-label="Enlace de invitación" />
+          <button type="button" id="share-copy-btn" class="btn-primary">Copiar enlace</button>
+        </div>
+        <span class="field-hint share-link-hint">Quien abra el enlace e inicie sesión tendrá acceso a este núcleo (solo a este).</span>
+        <span class="field-hint modal-hint">Clic fuera o Esc para cerrar</span>
+      </div>
+    </div>
+
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="app.js?v=202610181814"></script>
+  <script type="module" src="app.js?v=202610191116"></script>
   <script>
   (function () {
     const menu = document.getElementById('side-menu');

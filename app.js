@@ -11,11 +11,19 @@ import {
   getUserNucleiList,
   joinNucleusByInvite,
   renameNucleusDoc,
-  fetchParticipants
-} from './firebase-config.js?v=202610181814';
+  fetchParticipants,
+  claimUsername,
+  getUsernameOf,
+  normalizeUsername,
+  USERNAME_RE,
+  listNucleusMembers,
+  removeNucleusMember
+} from './firebase-config.js?v=202610191116';
 
 export const state = {
   user: null,
+  username: null,
+  registering: false,
   activeNucleusId: 'default-nucleus',
   activeNucleus: {
     id: 'default-nucleus',
@@ -111,6 +119,18 @@ const dom = {
   authErrorMsg: document.getElementById('auth-error-msg'),
   btnToggleAuthMode: document.getElementById('btn-toggle-auth-mode'),
   authToggleText: document.getElementById('auth-toggle-text'),
+  authEmailLabel: document.getElementById('auth-email-label'),
+  authUsernameGroup: document.getElementById('auth-username-group'),
+  authUsername: document.getElementById('auth-username'),
+  modalUsername: document.getElementById('modal-username'),
+  formUsername: document.getElementById('form-username'),
+  inputUsername: document.getElementById('input-username'),
+  usernameErrorMsg: document.getElementById('username-error-msg'),
+  modalShare: document.getElementById('modal-share'),
+  shareTitle: document.getElementById('share-title'),
+  shareMembers: document.getElementById('share-members'),
+  shareLinkInput: document.getElementById('share-link-input'),
+  shareCopyBtn: document.getElementById('share-copy-btn'),
   toast: document.getElementById('toast'),
   modalRenameNucleus: document.getElementById('modal-rename-nucleus'),
   formRenameNucleus: document.getElementById('form-rename-nucleus'),
@@ -145,11 +165,13 @@ document.addEventListener('DOMContentLoaded', () => {
     window.history.replaceState(null, '', clean);
   }
 
-  initFirebaseCloud((user) => {
+  initFirebaseCloud(async (user) => {
     state.user = user;
+    state.username = null;
     updateAuthUI();
     if (isHomeOpen()) renderHome();
     if (user) {
+      loadMyUsername(user);
       loadUserCloudData();
     } else if (getPendingJoin()) {
       showToast('Inicia sesión o crea una cuenta para unirte al núcleo compartido.');
@@ -157,6 +179,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// Nombre de usuario de la cuenta con sesión; si aún no tiene (cuentas antiguas), se lo pedimos
+async function loadMyUsername(user) {
+  const name = await getUsernameOf(user.uid);
+  if (state.user !== user) return;
+  if (name) {
+    state.username = name;
+    updateAuthUI();
+    if (isHomeOpen()) renderHome();
+  } else if (!state.registering) {
+    openUsernameModal();
+  }
+}
+
+function openUsernameModal() {
+  dom.inputUsername.value = '';
+  dom.usernameErrorMsg.classList.add('hidden');
+  dom.modalUsername.classList.remove('hidden');
+  dom.inputUsername.focus();
+}
+
+async function saveUsernameFromModal() {
+  const name = normalizeUsername(dom.inputUsername.value);
+  if (!name || !state.user) return true; // sin escribir nada: se le volverá a pedir
+  try {
+    state.username = await claimUsername(name);
+    updateAuthUI();
+    if (isHomeOpen()) renderHome();
+    showToast(`Tu usuario es @${state.username}`);
+    return true;
+  } catch (err) {
+    dom.usernameErrorMsg.textContent = authErrorText(err);
+    dom.usernameErrorMsg.classList.remove('hidden');
+    return false;
+  }
+}
 
 function setPendingJoin(id) {
   try { localStorage.setItem('circulos_pending_join', id); } catch (_) {}
@@ -218,7 +276,21 @@ function initEventListeners() {
     dom.inputNewNucleusName.focus();
   });
 
-  dom.btnShareNucleus.addEventListener('click', () => copyInviteLink());
+  dom.btnShareNucleus.addEventListener('click', () => openShareModal());
+  dom.shareCopyBtn.addEventListener('click', () => copyInviteLink(dom.modalShare.dataset.nucleusId));
+  dom.shareLinkInput.addEventListener('focus', () => dom.shareLinkInput.select());
+  dom.shareMembers.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-remove-uid]');
+    if (b) removeMemberFromShare(b.dataset.removeUid, b.dataset.removeName);
+  });
+  dom.formUsername.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (await saveUsernameFromModal()) dom.modalUsername.classList.add('hidden');
+  });
+  [dom.inputUsername, dom.authUsername].forEach((el) => el.addEventListener('input', () => {
+    const v = el.value.toLowerCase().replace(/[^a-z0-9._]/g, '');
+    if (v !== el.value) el.value = v;
+  }));
 
   dom.formRenameNucleus.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1813,6 +1885,18 @@ function updateNucleusUI() {
     });
     li.appendChild(edit);
 
+    const share = document.createElement('button');
+    share.type = 'button';
+    share.className = 'nucleus-rename-btn';
+    share.title = 'Compartir';
+    share.setAttribute('aria-label', `Compartir ${n.name}`);
+    share.innerHTML = SHARE_ICON;
+    share.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openShareModal(n.id);
+    });
+    li.appendChild(share);
+
     li.addEventListener('click', () => {
       dom.nucleusDropdown.classList.add('hidden');
       openNucleus(n.id);
@@ -1941,6 +2025,13 @@ async function renameNucleus(nucleusId, name) {
   showToast(`Núcleo renombrado a "${name}"`);
 }
 
+// Icono de «compartir» como en Drive: una persona con un + arriba a la derecha
+const SHARE_ICON = '<svg viewBox="0 0 20 20" fill="currentColor"><circle cx="8" cy="7" r="3.2"/><path d="M2 16.5c0-3 2.7-5 6-5s6 2 6 5v.5H2z"/><path d="M15.5 2.5a.75.75 0 01.75.75V5h1.75a.75.75 0 010 1.5h-1.75v1.75a.75.75 0 01-1.5 0V6.5H13a.75.75 0 010-1.5h1.75V3.25a.75.75 0 01.75-.75z"/></svg>';
+
+function inviteUrl(nucleusId) {
+  return `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(nucleusId)}`;
+}
+
 function copyInviteLink(nucleusId = state.activeNucleusId) {
   if (!state.user) {
     dom.nucleusDropdown.classList.add('hidden');
@@ -1948,13 +2039,93 @@ function copyInviteLink(nucleusId = state.activeNucleusId) {
     openAuthModal('login');
     return;
   }
-  const url = `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(nucleusId)}`;
+  const url = inviteUrl(nucleusId);
   navigator.clipboard.writeText(url).then(() => {
     showToast('¡Enlace de invitación copiado al portapapeles!');
     dom.nucleusDropdown.classList.add('hidden');
   }).catch(() => {
-    prompt('Copia este enlace de invitación:', url);
+    dom.shareLinkInput.focus();
+    dom.shareLinkInput.select();
+    showToast('No se pudo copiar solo: selecciona el enlace y cópialo.');
   });
+}
+
+// ---- Compartir (como en Drive): quién tiene acceso + enlace ----
+function nucleusEntry(id) {
+  return state.nucleiList.find((n) => n.id === id)
+    || (state.activeNucleus && state.activeNucleus.id === id ? state.activeNucleus : null);
+}
+
+function openShareModal(nucleusId = state.activeNucleusId) {
+  dom.nucleusDropdown.classList.add('hidden');
+  closeOptionsMenu();
+  if (!state.user) {
+    showToast('Inicia sesión para poder compartir este núcleo.');
+    openAuthModal('login');
+    return;
+  }
+  const n = nucleusEntry(nucleusId);
+  dom.modalShare.dataset.nucleusId = nucleusId;
+  dom.shareTitle.textContent = `Compartir «${(n && n.name) || 'Núcleo'}»`;
+  dom.shareLinkInput.value = inviteUrl(nucleusId);
+  dom.shareMembers.innerHTML = '<li class="share-loading">Cargando…</li>';
+  dom.modalShare.classList.remove('hidden');
+  dom.shareCopyBtn.focus();
+  loadShareMembers(nucleusId);
+}
+
+async function loadShareMembers(nucleusId) {
+  let members;
+  try {
+    members = await listNucleusMembers(nucleusId);
+  } catch (err) {
+    console.error(err);
+    if (dom.modalShare.dataset.nucleusId === nucleusId) {
+      dom.shareMembers.innerHTML = '<li class="share-loading">No se pudo cargar quién tiene acceso.</li>';
+    }
+    return;
+  }
+  if (dom.modalShare.dataset.nucleusId !== nucleusId) return;
+  const n = nucleusEntry(nucleusId);
+  const ownerId = n && n.ownerId;
+  const me = state.user && state.user.uid;
+  const iAmOwner = ownerId === me;
+
+  // el dueño primero, luego tú, luego el resto por nombre
+  members.sort((a, b) => {
+    const rank = (m) => (m.uid === ownerId ? 0 : m.uid === me ? 1 : 2);
+    return rank(a) - rank(b) || String(a.username || '~').localeCompare(String(b.username || '~'));
+  });
+
+  dom.shareMembers.innerHTML = members.map((m) => {
+    const name = m.username ? '@' + m.username : 'Sin nombre de usuario';
+    const initial = m.username ? m.username[0].toUpperCase() : '?';
+    const you = m.uid === me ? ' <span class="share-you">(tú)</span>' : '';
+    const role = m.uid === ownerId ? 'Propietario' : 'Editor';
+    const remove = iAmOwner && m.uid !== me
+      ? `<button type="button" class="share-remove" data-remove-uid="${escapeHtml(m.uid)}" data-remove-name="${escapeHtml(name)}" title="Quitar acceso">Quitar</button>`
+      : '';
+    return `
+      <li class="share-member">
+        <span class="share-avatar${m.username ? '' : ' empty'}" aria-hidden="true">${escapeHtml(initial)}</span>
+        <span class="share-name${m.username ? '' : ' empty'}">${escapeHtml(name)}${you}</span>
+        <span class="share-role">${role}</span>
+        ${remove}
+      </li>`;
+  }).join('') || '<li class="share-loading">Nadie todavía.</li>';
+}
+
+async function removeMemberFromShare(uid, name) {
+  const nucleusId = dom.modalShare.dataset.nucleusId;
+  if (!nucleusId || !confirm(`¿Quitar el acceso de ${name} a este núcleo?`)) return;
+  try {
+    await removeNucleusMember(nucleusId, uid);
+    showToast(`${name} ya no tiene acceso.`);
+  } catch (err) {
+    console.error(err);
+    showToast('No se pudo quitar el acceso.');
+  }
+  loadShareMembers(nucleusId);
 }
 
 
@@ -2180,6 +2351,9 @@ const modalOnClose = {
     if (name && name !== current) renameNucleus(id, name);
   }
 };
+modalOnClose['modal-username'] = () => {
+  saveUsernameFromModal().then((ok) => { if (!ok) dom.modalUsername.classList.remove('hidden'); });
+};
 const modalOnCancel = {
   'modal-new-nucleus': () => { dom.inputNewNucleusName.value = ''; }
 };
@@ -2205,9 +2379,14 @@ function initModals() {
 
 }
 
+function accountLabel() {
+  if (!state.user) return '';
+  return state.username ? '@' + state.username : (state.user.email || '');
+}
+
 function updateAuthUI() {
   const html = state.user
-    ? `<span class="account-email" title="${escapeHtml(state.user.email || '')}">${escapeHtml(state.user.email || '')}</span>
+    ? `<span class="account-email" title="${escapeHtml(state.user.email || '')}">${escapeHtml(accountLabel())}</span>
        <button type="button" class="account-btn" data-auth="logout">Cerrar sesión</button>`
     : `<button type="button" class="account-btn" data-auth="login">Iniciar sesión</button>
        <button type="button" class="account-btn primary" data-auth="register">Crear cuenta</button>`;
@@ -2233,8 +2412,35 @@ function openAuthModal(mode = 'login') {
   dom.authSubmitBtn.textContent = mode === 'login' ? 'Entrar' : 'Registrarse';
   dom.authToggleText.textContent = mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?';
   dom.btnToggleAuthMode.textContent = mode === 'login' ? 'Crear cuenta' : 'Iniciar sesión';
+  const register = mode === 'register';
+  dom.authEmailLabel.textContent = register ? 'Correo electrónico' : 'Correo o nombre de usuario';
+  dom.authEmail.type = register ? 'email' : 'text';
+  dom.authEmail.placeholder = register ? 'ejemplo@correo.com' : 'ejemplo@correo.com o tu usuario';
+  dom.authEmail.autocomplete = register ? 'email' : 'username';
+  dom.authUsernameGroup.classList.toggle('hidden', !register);
+  dom.authUsername.required = register;
+  dom.authPassword.autocomplete = register ? 'new-password' : 'current-password';
   dom.authErrorMsg.classList.add('hidden');
   dom.modalAuth.classList.remove('hidden');
+}
+
+// Mensajes de error en castellano (Firebase los da en inglés)
+function authErrorText(err) {
+  const code = (err && err.code) || '';
+  const map = {
+    'auth/invalid-credential': 'Usuario, correo o contraseña incorrectos.',
+    'auth/wrong-password': 'Usuario, correo o contraseña incorrectos.',
+    'auth/user-not-found': 'Usuario, correo o contraseña incorrectos.',
+    'auth/invalid-email': 'Ese correo no es válido.',
+    'auth/email-already-in-use': 'Ya hay una cuenta con ese correo.',
+    'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
+    'auth/too-many-requests': 'Demasiados intentos. Espera un poco y vuelve a probar.',
+    'auth/network-request-failed': 'Sin conexión. Revisa tu internet.'
+  };
+  if (map[code]) return map[code];
+  if (code.startsWith('app/')) return err.message;
+  if (code === 'permission-denied') return 'No se pudo guardar el nombre de usuario (permisos).';
+  return (err && err.message) || 'Error de autenticación';
 }
 
 function toggleAuthMode() {
@@ -2251,14 +2457,27 @@ async function handleAuthSubmit(e) {
     if (state.authMode === 'login') {
       await loginUser(email, password);
     } else {
-      await registerUser(email, password);
+      const username = normalizeUsername(dom.authUsername.value);
+      if (!USERNAME_RE.test(username)) {
+        throw Object.assign(new Error('El usuario debe tener de 3 a 20 caracteres: letras minúsculas, números, punto o guion bajo.'), { code: 'app/username-invalid' });
+      }
+      state.registering = true;
+      try {
+        const res = await registerUser(email, username, password);
+        state.username = res.username;
+      } finally {
+        state.registering = false;
+      }
+      updateAuthUI();
+      if (isHomeOpen()) renderHome();
     }
     dom.modalAuth.classList.add('hidden');
     dom.authEmail.value = '';
     dom.authPassword.value = '';
-    showToast(state.authMode === 'login' ? '¡Bienvenido!' : '¡Cuenta creada!');
+    dom.authUsername.value = '';
+    showToast(state.authMode === 'login' ? '¡Bienvenido!' : `¡Cuenta creada! Tu usuario es @${state.username}`);
   } catch (err) {
-    dom.authErrorMsg.textContent = err.message || 'Error de autenticación';
+    dom.authErrorMsg.textContent = authErrorText(err);
     dom.authErrorMsg.classList.remove('hidden');
   }
 }
@@ -2427,12 +2646,12 @@ function nucleusThumbSvg(n, people) {
 function renderHome() {
   if (!dom.homeGrid) return;
   dom.homeSub.textContent = state.user
-    ? `Sesión iniciada como ${state.user.email} · se sincronizan entre dispositivos`
+    ? `Sesión iniciada como ${accountLabel()} · se sincronizan entre dispositivos`
     : 'Guardados en este navegador · inicia sesión arriba a la derecha para sincronizarlos';
 
   const icon = {
     rename: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.59 3.59a2 2 0 012.82 2.82l-8.5 8.5a1 1 0 01-.46.26l-3.2.8a.5.5 0 01-.6-.6l.8-3.2a1 1 0 01.26-.46l8.5-8.5z"/></svg>',
-    share: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/></svg>'
+    share: SHARE_ICON
   };
 
   const cards = state.nucleiList.map((n) => {
@@ -2450,7 +2669,7 @@ function renderHome() {
         </div>
         <div class="home-card-actions">
           <button type="button" class="home-card-btn" data-action="rename" title="Renombrar" aria-label="Renombrar ${name}">${icon.rename}</button>
-          <button type="button" class="home-card-btn" data-action="share" title="Copiar enlace de invitación" aria-label="Copiar enlace de invitación de ${name}">${icon.share}</button>
+          <button type="button" class="home-card-btn" data-action="share" title="Compartir" aria-label="Compartir ${name}">${icon.share}</button>
         </div>
       </div>`;
   }).join('');
@@ -2491,7 +2710,7 @@ function initHome() {
     if (btn && btn.dataset.action === 'new') { openNewNucleusModal(); return; }
     const id = card.dataset.id;
     if (btn && btn.dataset.action === 'rename') { e.stopPropagation(); openRenameNucleus(id); return; }
-    if (btn && btn.dataset.action === 'share') { e.stopPropagation(); copyInviteLink(id); return; }
+    if (btn && btn.dataset.action === 'share') { e.stopPropagation(); openShareModal(id); return; }
     openNucleus(id);
   });
   dom.homeGrid.addEventListener('keydown', (e) => {

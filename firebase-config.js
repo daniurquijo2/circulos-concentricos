@@ -45,14 +45,96 @@ export async function initFirebaseCloud(onAuthCallback) {
   }
 }
 
-export async function loginUser(email, password) {
+/* --- Cuentas: correo + nombre de usuario ------------------------------ */
+// usernames/{nombre}  → { uid, email, username }  (para entrar con el usuario)
+// profiles/{uid}      → { username }              (para mostrar quién es quién)
+
+export const USERNAME_RE = /^[a-z0-9._]{3,20}$/;
+
+export function normalizeUsername(name) {
+  return String(name || '').trim().replace(/^@/, '').toLowerCase();
+}
+
+export async function isUsernameAvailable(username) {
+  if (!db) throw new Error("Firebase no está configurado aún.");
+  const snap = await fb.getDoc(fb.doc(db, "usernames", normalizeUsername(username)));
+  return !snap.exists();
+}
+
+// Entrar con correo o con nombre de usuario
+export async function loginUser(identifier, password) {
   if (!auth) throw new Error("Firebase no está configurado aún.");
+  let email = String(identifier || '').trim();
+  if (!email.includes('@')) {
+    const snap = await fb.getDoc(fb.doc(db, "usernames", normalizeUsername(email)));
+    if (!snap.exists()) {
+      const err = new Error("No existe ninguna cuenta con ese nombre de usuario.");
+      err.code = "app/username-not-found";
+      throw err;
+    }
+    email = snap.data().email;
+  }
   return await fb.signInWithEmailAndPassword(auth, email, password);
 }
 
-export async function registerUser(email, password) {
+// Reserva el nombre de usuario para la cuenta con sesión iniciada
+export async function claimUsername(username) {
+  if (!db || !auth || !auth.currentUser) throw new Error("Inicia sesión primero.");
+  const name = normalizeUsername(username);
+  if (!USERNAME_RE.test(name)) {
+    const err = new Error("El usuario debe tener de 3 a 20 caracteres: letras minúsculas, números, punto o guion bajo.");
+    err.code = "app/username-invalid";
+    throw err;
+  }
+  const user = auth.currentUser;
+  const nameRef = fb.doc(db, "usernames", name);
+  const profileRef = fb.doc(db, "profiles", user.uid);
+  await fb.runTransaction(db, async (tx) => {
+    const taken = await tx.get(nameRef);
+    if (taken.exists() && taken.data().uid !== user.uid) {
+      const err = new Error("Ese nombre de usuario ya está cogido.");
+      err.code = "app/username-taken";
+      throw err;
+    }
+    if (!taken.exists()) tx.set(nameRef, { uid: user.uid, email: user.email, username: name });
+    tx.set(profileRef, { username: name });
+  });
+  return name;
+}
+
+export async function registerUser(email, username, password) {
   if (!auth) throw new Error("Firebase no está configurado aún.");
-  return await fb.createUserWithEmailAndPassword(auth, email, password);
+  const name = normalizeUsername(username);
+  if (!USERNAME_RE.test(name)) {
+    const err = new Error("El usuario debe tener de 3 a 20 caracteres: letras minúsculas, números, punto o guion bajo.");
+    err.code = "app/username-invalid";
+    throw err;
+  }
+  if (!(await isUsernameAvailable(name))) {
+    const err = new Error("Ese nombre de usuario ya está cogido.");
+    err.code = "app/username-taken";
+    throw err;
+  }
+  const cred = await fb.createUserWithEmailAndPassword(auth, email, password);
+  try {
+    await claimUsername(name);
+  } catch (err) {
+    // si alguien se lo llevó justo a la vez, deshacemos la cuenta recién creada
+    try { await fb.deleteUser(cred.user); } catch (_) {}
+    throw err;
+  }
+  return { cred, username: name };
+}
+
+export async function getUsernameOf(uid) {
+  if (!db) return null;
+  try {
+    const snap = await fb.getDoc(fb.doc(db, "profiles", uid));
+    return snap.exists() ? snap.data().username || null : null;
+  } catch (err) {
+    console.warn("No se pudo leer el perfil", uid, err);
+    return null;
+  }
 }
 
 export async function logoutUser() {
@@ -156,6 +238,23 @@ export async function joinNucleusByInvite(nucleusId, userId) {
 }
 
 /* --- Lectura puntual (para la página de inicio) ------------------------ */
+
+/* --- Personas con acceso a un núcleo ---------------------------------- */
+
+export async function listNucleusMembers(nucleusId) {
+  if (!db) return [];
+  const qs = await fb.getDocs(fb.collection(db, "nuclei", nucleusId, "members"));
+  const members = qs.docs.map((d) => ({ uid: d.id, joinedAt: d.data().joinedAt || null }));
+  await Promise.all(members.map(async (m) => { m.username = await getUsernameOf(m.uid); }));
+  return members;
+}
+
+export async function removeNucleusMember(nucleusId, uid) {
+  if (!db) return;
+  await fb.deleteDoc(fb.doc(db, "nuclei", nucleusId, "members", uid));
+  // quitarlo también de su lista de núcleos (las reglas lo permiten al dueño)
+  try { await fb.deleteDoc(fb.doc(db, "users", uid, "nuclei", nucleusId)); } catch (_) {}
+}
 
 export async function fetchParticipants(nucleusId) {
   if (!db) return null;

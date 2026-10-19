@@ -19,6 +19,32 @@ service cloud.firestore {
     // Índice personal: "en qué núcleos estoy". Cada uno gestiona solo el suyo.
     match /users/{uid}/nuclei/{nucleusId} {
       allow read, write: if signedIn() && request.auth.uid == uid;
+      // El dueño de un núcleo puede quitarlo de la lista de alguien al retirarle el acceso.
+      allow delete: if isOwner(nucleusId);
+    }
+
+    // Nombre de usuario → cuenta. Se puede consultar sin sesión (para entrar con
+    // el usuario), pero no listar. Cada uno solo puede reservar uno para sí mismo.
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn()
+        && name.matches('^[a-z0-9._]{3,20}$')
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.username == name;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Perfil público mínimo: solo el nombre de usuario (para ver quién tiene acceso).
+    match /profiles/{uid} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['username'])
+        && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid;
+      allow delete: if false;
     }
 
     match /nuclei/{nucleusId} {
