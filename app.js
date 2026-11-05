@@ -23,7 +23,7 @@ import {
   changeEmail,
   syncUsernameEmail,
   deleteAccount
-} from './firebase-config.js?v=202611051403';
+} from './firebase-config.js?v=202611051558';
 
 export const state = {
   user: null,
@@ -91,6 +91,7 @@ const dom = {
   toggleGroupCircles: document.getElementById('toggle-group-circles'),
   selectSort: document.getElementById('select-sort'),
   participantsListContainer: document.getElementById('participants-list-container'),
+  listFilters: document.getElementById('list-filters'),
   sideViewMain: document.getElementById('side-view-main'),
   sideViewDetail: document.getElementById('side-view-detail'),
   btnBackToList: document.getElementById('btn-back-to-list'),
@@ -323,6 +324,7 @@ function initEventListeners() {
   dom.btnCustomizeCircles.addEventListener('click', () => { closeOptionsMenu(); openCircleCustomizerModal(); });
   initSearch();
   initBooksEditors();
+  initListFilters();
   dom.fontSizeSlider.addEventListener('input', () => {
     // nivel = último punto de control sobrepasado; se aplica y se guarda solo
     const level = Math.floor(parseFloat(dom.fontSizeSlider.value) + 1e-6);
@@ -1241,14 +1243,20 @@ function saveParticipant(p) {
 }
 
 function renderParticipantsList() {
-  const activeParticipants = state.participants.filter(p => !p.archived);
-  dom.participantCount.textContent = activeParticipants.length;
+  const allActive = state.participants.filter(p => !p.archived);
+  const filtering = activeListFilters().length > 0;
+  const activeParticipants = filtering ? allActive.filter(passesListFilters) : allActive;
+  dom.participantCount.textContent = filtering
+    ? `${activeParticipants.length} / ${allActive.length}`
+    : allActive.length;
   dom.participantsListContainer.innerHTML = '';
 
   if (activeParticipants.length === 0) {
     dom.participantsListContainer.innerHTML = `
       <div style="text-align:center; padding: 24px; color: var(--text-muted); font-size: 13px;">
-        No hay participantes en este núcleo.<br>Añade uno con el formulario de arriba.
+        ${allActive.length === 0
+          ? 'No hay participantes en este núcleo.<br>Añade uno con el formulario de arriba.'
+          : 'Nadie cumple los filtros.'}
       </div>
     `;
     return;
@@ -1269,6 +1277,7 @@ function renderParticipantsList() {
     const circles = state.activeNucleus.circles;
     circles.forEach((circle, idx) => {
       const inCircle = sortedList.filter(p => p.circleIndex === idx);
+      if (filtering && inCircle.length === 0) return;   // con filtros, sin grupos vacíos
       renderCircleGroupSection(circle.name, circle.color, inCircle);
     });
 
@@ -1283,6 +1292,196 @@ function renderParticipantsList() {
   }
 
   initDragAndDropListReordering();
+}
+
+// ---- Filtros de «Ver todos» ----
+// Cada filtro se combina con el resultado de los anteriores (de arriba abajo)
+// por intersección («Y») o unión («O»). Los filtros sin completar no cuentan.
+const FILTER_TYPES = [
+  { value: 'studied', label: 'Han estudiado un libro' },
+  { value: 'notStudied', label: 'No han estudiado un libro' },
+  { value: 'age', label: 'Edad' },
+  { value: 'doing', label: 'Estudiando ahora' }
+];
+const AGE_MODES = [
+  { value: 'exact', label: 'Exactamente' },
+  { value: 'between', label: 'Entre' },
+  { value: 'min', label: 'Mayor o igual que' },
+  { value: 'max', label: 'Menor o igual que' }
+];
+let listFilters = [];
+let listFilterSeq = 0;
+
+function newListFilter(type = 'studied') {
+  return { id: ++listFilterSeq, type, op: 'and', books: [], ageMode: 'exact', a: null, b: null };
+}
+
+function isFilterComplete(f) {
+  if (f.type === 'age') {
+    if (f.ageMode === 'between') return f.a !== null && f.b !== null;
+    return f.a !== null;
+  }
+  return f.books.length > 0;
+}
+
+function activeListFilters() {
+  return listFilters.filter(isFilterComplete);
+}
+
+function personAge(p) {
+  if (p.age === null || p.age === undefined || p.age === '') return null;
+  const n = Number(p.age);
+  return Number.isFinite(n) ? n : null;
+}
+
+function matchesFilter(p, f) {
+  switch (f.type) {
+    case 'studied': return f.books.every((n) => hasBook(p, n));
+    case 'notStudied': return f.books.every((n) => !hasBook(p, n));
+    case 'doing': return f.books.some((n) => isDoing(p, n));
+    case 'age': {
+      const age = personAge(p);
+      if (age === null) return false;
+      if (f.ageMode === 'exact') return age === f.a;
+      if (f.ageMode === 'min') return age >= f.a;
+      if (f.ageMode === 'max') return age <= f.a;
+      const lo = Math.min(f.a, f.b), hi = Math.max(f.a, f.b);
+      return age >= lo && age <= hi;
+    }
+    default: return true;
+  }
+}
+
+function passesListFilters(p) {
+  const active = activeListFilters();
+  if (!active.length) return true;
+  let result = matchesFilter(p, active[0]);
+  for (let i = 1; i < active.length; i++) {
+    const f = active[i];
+    result = f.op === 'or' ? (result || matchesFilter(p, f)) : (result && matchesFilter(p, f));
+  }
+  return result;
+}
+
+function initListFilters() {
+  const root = dom.listFilters;
+  if (!root) return;
+
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn || !root.contains(btn)) return;
+    const card = btn.closest('[data-filter]');
+    const f = card && listFilters.find((x) => x.id === Number(card.dataset.filter));
+    const act = btn.dataset.act;
+    if (act === 'add') {
+      listFilters.push(newListFilter());
+    } else if (act === 'clear') {
+      listFilters = [];
+    } else if (!f) {
+      return;
+    } else if (act === 'remove') {
+      listFilters = listFilters.filter((x) => x !== f);
+    } else if (act === 'op') {
+      f.op = btn.dataset.op;
+    } else if (act === 'book') {
+      const n = Number(btn.dataset.n);
+      if (f.type === 'doing') {
+        f.books = f.books.includes(n) ? [] : [n];         // un solo libro
+      } else {
+        f.books = f.books.includes(n) ? f.books.filter((x) => x !== n) : [...f.books, n].sort((x, y) => x - y);
+      }
+    } else {
+      return;
+    }
+    renderListFilters();
+    renderParticipantsList();
+  });
+
+  root.addEventListener('change', (e) => {
+    const card = e.target.closest('[data-filter]');
+    const f = card && listFilters.find((x) => x.id === Number(card.dataset.filter));
+    if (!f) return;
+    if (e.target.dataset.field === 'type') {
+      f.type = e.target.value;
+      f.books = [];
+      f.a = null; f.b = null;
+    } else if (e.target.dataset.field === 'ageMode') {
+      f.ageMode = e.target.value;
+      if (f.ageMode !== 'between') f.b = null;
+    } else {
+      return;
+    }
+    renderListFilters();
+    renderParticipantsList();
+  });
+
+  // Las edades se aplican mientras se escriben, sin repintar los filtros (no perder el foco)
+  root.addEventListener('input', (e) => {
+    const field = e.target.dataset.field;
+    if (field !== 'a' && field !== 'b') return;
+    const card = e.target.closest('[data-filter]');
+    const f = card && listFilters.find((x) => x.id === Number(card.dataset.filter));
+    if (!f) return;
+    const v = e.target.value.trim();
+    f[field] = v === '' || !Number.isFinite(Number(v)) ? null : Number(v);
+    card.classList.toggle('incomplete', !isFilterComplete(f));
+    renderParticipantsList();
+  });
+
+  renderListFilters();
+}
+
+function renderListFilters() {
+  const root = dom.listFilters;
+  if (!root) return;
+  const typeOptions = (sel) => FILTER_TYPES.map((t) =>
+    `<option value="${t.value}"${t.value === sel ? ' selected' : ''}>${t.label}</option>`).join('');
+
+  const body = (f) => {
+    if (f.type === 'age') {
+      const modes = AGE_MODES.map((m) =>
+        `<option value="${m.value}"${m.value === f.ageMode ? ' selected' : ''}>${m.label}</option>`).join('');
+      const val = (x) => (x === null ? '' : x);
+      return `<div class="filter-age">
+          <select data-field="ageMode" aria-label="Tipo de búsqueda por edad">${modes}</select>
+          <input type="number" data-field="a" min="0" max="130" placeholder="Edad" value="${val(f.a)}" aria-label="Edad" />
+          ${f.ageMode === 'between'
+            ? `<span class="filter-age-sep">y</span><input type="number" data-field="b" min="0" max="130" placeholder="Edad" value="${val(f.b)}" aria-label="Edad máxima" />`
+            : ''}
+        </div>`;
+    }
+    const hint = f.type === 'studied' ? 'Todos los marcados'
+      : f.type === 'notStudied' ? 'Ninguno de los marcados'
+      : 'Elige un libro';
+    return `<div class="filter-books" role="group" aria-label="Libros">
+        ${BOOKS.map((b) => {
+          const on = f.books.includes(b.n);
+          return `<button type="button" class="book-toggle small${on ? ' done' : ''}" data-act="book" data-n="${b.n}"
+            style="--book:${b.color};--book-ink:${b.ink}" aria-pressed="${on}">L${b.n}</button>`;
+        }).join('')}
+      </div>
+      <div class="filter-hint">${hint}</div>`;
+  };
+
+  const cards = listFilters.map((f, i) => `
+    ${i > 0 ? `<div class="filter-op" data-filter="${f.id}" role="group" aria-label="Cómo combinar con el filtro anterior">
+        <button type="button" data-act="op" data-op="and" class="${f.op === 'and' ? 'on' : ''}" title="Intersección: que cumplan esto y lo anterior">Y · intersección</button>
+        <button type="button" data-act="op" data-op="or" class="${f.op === 'or' ? 'on' : ''}" title="Unión: que cumplan esto o lo anterior">O · unión</button>
+      </div>` : ''}
+    <div class="filter-card${isFilterComplete(f) ? '' : ' incomplete'}" data-filter="${f.id}">
+      <div class="filter-head">
+        <select data-field="type" aria-label="Tipo de filtro">${typeOptions(f.type)}</select>
+        <button type="button" class="filter-remove" data-act="remove" title="Quitar este filtro" aria-label="Quitar filtro">×</button>
+      </div>
+      ${body(f)}
+    </div>`).join('');
+
+  root.innerHTML = `${cards}
+    <div class="filter-actions">
+      <button type="button" class="filter-add" data-act="add">+ ${listFilters.length ? 'Añadir otro filtro' : 'Añadir filtro'}</button>
+      ${listFilters.length ? '<button type="button" class="filter-clear" data-act="clear">Quitar filtros</button>' : ''}
+    </div>`;
+  notifySideMenuResize();
 }
 
 function renderCircleGroupSection(title, color, items) {
