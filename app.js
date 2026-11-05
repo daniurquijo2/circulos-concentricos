@@ -23,7 +23,7 @@ import {
   changeEmail,
   syncUsernameEmail,
   deleteAccount
-} from './firebase-config.js?v=202611051558';
+} from './firebase-config.js?v=202611051623';
 
 export const state = {
   user: null,
@@ -1313,7 +1313,7 @@ let listFilters = [];
 let listFilterSeq = 0;
 
 function newListFilter(type = 'studied') {
-  return { id: ++listFilterSeq, type, op: 'and', books: [], ageMode: 'exact', a: null, b: null };
+  return { id: ++listFilterSeq, type, op: 'and', books: [], booksOp: 'or', ageMode: 'exact', a: null, b: null };
 }
 
 function isFilterComplete(f) {
@@ -1338,7 +1338,9 @@ function matchesFilter(p, f) {
   switch (f.type) {
     case 'studied': return f.books.every((n) => hasBook(p, n));
     case 'notStudied': return f.books.every((n) => !hasBook(p, n));
-    case 'doing': return f.books.some((n) => isDoing(p, n));
+    case 'doing': return f.booksOp === 'and'
+      ? f.books.every((n) => isDoing(p, n))
+      : f.books.some((n) => isDoing(p, n));
     case 'age': {
       const age = personAge(p);
       if (age === null) return false;
@@ -1383,13 +1385,11 @@ function initListFilters() {
       listFilters = listFilters.filter((x) => x !== f);
     } else if (act === 'op') {
       f.op = btn.dataset.op;
+    } else if (act === 'booksOp') {
+      f.booksOp = btn.dataset.op;
     } else if (act === 'book') {
       const n = Number(btn.dataset.n);
-      if (f.type === 'doing') {
-        f.books = f.books.includes(n) ? [] : [n];         // un solo libro
-      } else {
-        f.books = f.books.includes(n) ? f.books.filter((x) => x !== n) : [...f.books, n].sort((x, y) => x - y);
-      }
+      f.books = f.books.includes(n) ? f.books.filter((x) => x !== n) : [...f.books, n].sort((x, y) => x - y);
     } else {
       return;
     }
@@ -1404,6 +1404,7 @@ function initListFilters() {
     if (e.target.dataset.field === 'type') {
       f.type = e.target.value;
       f.books = [];
+      f.booksOp = 'or';
       f.a = null; f.b = null;
     } else if (e.target.dataset.field === 'ageMode') {
       f.ageMode = e.target.value;
@@ -1452,7 +1453,14 @@ function renderListFilters() {
     }
     const hint = f.type === 'studied' ? 'Todos los marcados'
       : f.type === 'notStudied' ? 'Ninguno de los marcados'
-      : 'Elige un libro';
+      : f.books.length < 2 ? 'Elige uno o varios libros'
+      : f.booksOp === 'and' ? 'Estudiando todos los marcados' : 'Estudiando alguno de los marcados';
+    const booksOp = f.type === 'doing' && f.books.length >= 2
+      ? `<div class="filter-op inline" role="group" aria-label="Cómo combinar los libros marcados">
+          <button type="button" data-act="booksOp" data-op="or" class="${f.booksOp !== 'and' ? 'on' : ''}" title="Alguno de los libros marcados">O</button>
+          <button type="button" data-act="booksOp" data-op="and" class="${f.booksOp === 'and' ? 'on' : ''}" title="Todos los libros marcados">Y</button>
+        </div>`
+      : '';
     return `<div class="filter-books" role="group" aria-label="Libros">
         ${BOOKS.map((b) => {
           const on = f.books.includes(b.n);
@@ -1460,13 +1468,13 @@ function renderListFilters() {
             style="--book:${b.color};--book-ink:${b.ink}" aria-pressed="${on}">L${b.n}</button>`;
         }).join('')}
       </div>
-      <div class="filter-hint">${hint}</div>`;
+      <div class="filter-foot">${booksOp}<span class="filter-hint">${hint}</span></div>`;
   };
 
   const cards = listFilters.map((f, i) => `
     ${i > 0 ? `<div class="filter-op" data-filter="${f.id}" role="group" aria-label="Cómo combinar con el filtro anterior">
-        <button type="button" data-act="op" data-op="and" class="${f.op === 'and' ? 'on' : ''}" title="Intersección: que cumplan esto y lo anterior">Y · intersección</button>
-        <button type="button" data-act="op" data-op="or" class="${f.op === 'or' ? 'on' : ''}" title="Unión: que cumplan esto o lo anterior">O · unión</button>
+        <button type="button" data-act="op" data-op="and" class="${f.op === 'and' ? 'on' : ''}" title="Intersección: que cumplan esto y lo anterior">Y</button>
+        <button type="button" data-act="op" data-op="or" class="${f.op === 'or' ? 'on' : ''}" title="Unión: que cumplan esto o lo anterior">O</button>
       </div>` : ''}
     <div class="filter-card${isFilterComplete(f) ? '' : ' incomplete'}" data-filter="${f.id}">
       <div class="filter-head">

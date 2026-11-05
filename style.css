@@ -858,6 +858,9 @@ textarea { resize: vertical; line-height: 1.55; }
 }
 .filter-op button:hover { color: var(--text-main); }
 .filter-op button.on { background: var(--accent-tint); border-color: var(--accent-text); color: var(--accent-text); }
+.filter-foot { display: flex; align-items: center; gap: 8px; }
+.filter-op.inline { justify-content: flex-start; }
+.filter-op button { min-width: 32px; }
 .filter-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .filter-add {
   background: none;
