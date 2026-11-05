@@ -23,7 +23,7 @@ import {
   changeEmail,
   syncUsernameEmail,
   deleteAccount
-} from './firebase-config.js?v=202610191134';
+} from './firebase-config.js?v=202611051403';
 
 export const state = {
   user: null,
@@ -619,7 +619,7 @@ function initCanvasZoom() {
   });
 }
 
-// ---- Libros de estudio (L1 = base de la pirámide … L7 = cima) ----
+// ---- Libros de estudio (L1 = base de la pirámide … L7 = cima; L8–L14 segunda fila) ----
 const BOOKS = [
   { n: 1, color: '#CA0068', ink: '#FFFFFF' },
   { n: 2, color: '#E23940', ink: '#FFFFFF' },
@@ -627,7 +627,14 @@ const BOOKS = [
   { n: 4, color: '#FCB131', ink: '#14110C' },
   { n: 5, color: '#FFD203', ink: '#14110C' },
   { n: 6, color: '#FFEA6D', ink: '#14110C' },
-  { n: 7, color: '#E9EA67', ink: '#14110C' }
+  { n: 7, color: '#E9EA67', ink: '#14110C' },
+  { n: 8, color: '#84BD00', ink: '#14110C' },
+  { n: 9, color: '#009A44', ink: '#14110C' },
+  { n: 10, color: '#00A7B5', ink: '#14110C' },
+  { n: 11, color: '#0072CE', ink: '#FFFFFF' },
+  { n: 12, color: '#485CC7', ink: '#FFFFFF' },
+  { n: 13, color: '#743BBA', ink: '#FFFFFF' },
+  { n: 14, color: '#AF3CC8', ink: '#FFFFFF' }
 ];
 
 function hasBook(p, n) {
@@ -659,8 +666,8 @@ function notifySideMenuResize() {
 
 /*
  * Editor de libros reutilizable (perfil y formulario de alta):
- *  - «Libros completados»: 7 casillas que se colorean
- *  - «Haciendo ahora»: libros elegidos + botón «+» que despliega los 7 libros
+ *  - «Libros completados»: 14 casillas (dos filas de 7) que se colorean
+ *  - «Haciendo ahora»: libros elegidos + botón «+» que despliega los 14 libros
  * getModel() devuelve el objeto con { books, doing }; onChange() se llama tras cada cambio.
  */
 function createBooksEditor(root, getModel, onChange, onBefore = () => {}) {
