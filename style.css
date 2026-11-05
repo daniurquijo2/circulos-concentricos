@@ -1094,6 +1094,7 @@ textarea { resize: vertical; line-height: 1.55; }
 /* Libros de estudio */
 .books-picker { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .book-toggle {
+  padding: 0;
   height: 34px;
   border-radius: 7px;
   border: 1px solid var(--line-strong);

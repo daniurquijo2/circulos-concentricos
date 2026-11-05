@@ -23,7 +23,7 @@ import {
   changeEmail,
   syncUsernameEmail,
   deleteAccount
-} from './firebase-config.js?v=202611051623';
+} from './firebase-config.js?v=202611051655';
 
 export const state = {
   user: null,
@@ -255,6 +255,20 @@ function saveLocalState() {
   }));
 }
 
+// Antes los libros 8–14 eran 8, 9 … 14: pasan a ser 8.1, 9.1 … 14.1
+function migrateOldBookIds(p) {
+  if (!p) return false;
+  let changed = false;
+  ['books', 'doing'].forEach((k) => {
+    if (!Array.isArray(p[k])) return;
+    if (!p[k].some((n) => Number.isInteger(n) && n >= 8 && n <= 14)) return;
+    p[k] = [...new Set(p[k].map((n) => (Number.isInteger(n) && n >= 8 && n <= 14 ? Number(`${n}.1`) : n)))]
+      .sort((x, y) => x - y);
+    changed = true;
+  });
+  return changed;
+}
+
 function loadLocalState() {
   const saved = localStorage.getItem('circulos_state');
   if (saved) {
@@ -270,6 +284,9 @@ function loadLocalState() {
       if (Array.isArray(own)) state.participants = own;
       else if (data.participants) state.participants = data.participants;
       state.participantsByNucleus[state.activeNucleusId] = state.participants;
+      Object.values(state.participantsByNucleus).forEach((list) => {
+        if (Array.isArray(list)) list.forEach(migrateOldBookIds);
+      });
     } catch (e) {
       console.error(e);
     }
@@ -621,33 +638,45 @@ function initCanvasZoom() {
   });
 }
 
-// ---- Libros de estudio (L1 = base de la pirámide … L7 = cima; L8–L14 segunda fila) ----
-const BOOKS = [
+// ---- Libros de estudio ----
+// L1 = base de la pirámide … L7 = cima. Debajo, los libros 8–14, cada uno con
+// tres partes (8.1, 8.2, 8.3…) del mismo color: fila .1, fila .2 y fila .3.
+// El id de cada libro es un número: 1…7 y 8.1, 8.2, 8.3 … 14.3.
+const BOOK_MAIN = [
   { n: 1, color: '#CA0068', ink: '#FFFFFF' },
   { n: 2, color: '#E23940', ink: '#FFFFFF' },
   { n: 3, color: '#EF7623', ink: '#14110C' },
   { n: 4, color: '#FCB131', ink: '#14110C' },
   { n: 5, color: '#FFD203', ink: '#14110C' },
   { n: 6, color: '#FFEA6D', ink: '#14110C' },
-  { n: 7, color: '#E9EA67', ink: '#14110C' },
-  { n: 8, color: '#84BD00', ink: '#14110C' },
-  { n: 9, color: '#009A44', ink: '#14110C' },
-  { n: 10, color: '#00A7B5', ink: '#14110C' },
-  { n: 11, color: '#0072CE', ink: '#FFFFFF' },
-  { n: 12, color: '#485CC7', ink: '#FFFFFF' },
-  { n: 13, color: '#743BBA', ink: '#FFFFFF' },
-  { n: 14, color: '#AF3CC8', ink: '#FFFFFF' }
+  { n: 7, color: '#E9EA67', ink: '#14110C' }
 ];
+const BOOK_SERIES = [
+  { s: 8, color: '#84BD00', ink: '#14110C' },
+  { s: 9, color: '#009A44', ink: '#14110C' },
+  { s: 10, color: '#00A7B5', ink: '#14110C' },
+  { s: 11, color: '#0072CE', ink: '#FFFFFF' },
+  { s: 12, color: '#485CC7', ink: '#FFFFFF' },
+  { s: 13, color: '#743BBA', ink: '#FFFFFF' },
+  { s: 14, color: '#AF3CC8', ink: '#FFFFFF' }
+];
+const BOOKS = [
+  ...BOOK_MAIN.map((b) => ({ ...b, label: `L${b.n}`, main: true })),
+  ...[1, 2, 3].flatMap((k) => BOOK_SERIES.map((b) => ({ n: Number(`${b.s}.${k}`), label: `${b.s}.${k}`, color: b.color, ink: b.ink, main: false })))
+];
+const BOOK_BY_ID = new Map(BOOKS.map((b) => [b.n, b]));
+function bookById(n) { return BOOK_BY_ID.get(Number(n)); }
+function bookLabel(n) { const b = bookById(n); return b ? b.label : `L${n}`; }
 
 function hasBook(p, n) {
   return Array.isArray(p.books) && p.books.includes(n);
 }
 
 function booksStripHtml(p, cls) {
-  return `<div class="${cls}">` + BOOKS.map((b) => {
+  return `<div class="${cls}">` + BOOKS.filter((b) => b.main).map((b) => {
     const done = hasBook(p, b.n);
     const style = done ? ` style="--book:${b.color};--book-ink:${b.ink}"` : '';
-    return `<span class="book-chip${done ? ' done' : ''}"${style} title="Libro ${b.n}${done ? ' · hecho' : ' · pendiente'}">L${b.n}</span>`;
+    return `<span class="book-chip${done ? ' done' : ''}"${style} title="Libro ${b.n}${done ? ' · hecho' : ' · pendiente'}">${b.label}</span>`;
   }).join('') + '</div>';
 }
 
@@ -656,9 +685,9 @@ function isDoing(p, n) {
 }
 
 function bookChipHtml(n, done, extra = '') {
-  const b = BOOKS[n - 1];
+  const b = bookById(n);
   const style = done ? ` style="--book:${b.color};--book-ink:${b.ink}"` : '';
-  return `<span class="book-chip${done ? ' done' : ''}${extra}"${style}>L${n}</span>`;
+  return `<span class="book-chip${done ? ' done' : ''}${extra}"${style}>${bookLabel(n)}</span>`;
 }
 
 // Avisar al menú lateral de que su contenido ha cambiado de alto
@@ -693,7 +722,7 @@ function createBooksEditor(root, getModel, onChange, onBefore = () => {}) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'book-toggle';
-    btn.textContent = `L${b.n}`;
+    btn.textContent = `${b.label}`;
     btn.style.setProperty('--book', b.color);
     btn.style.setProperty('--book-ink', b.ink);
     btn.addEventListener('click', () => {
@@ -717,7 +746,7 @@ function createBooksEditor(root, getModel, onChange, onBefore = () => {}) {
     const pick = document.createElement('button');
     pick.type = 'button';
     pick.className = 'book-toggle done small';
-    pick.textContent = `L${b.n}`;
+    pick.textContent = `${b.label}`;
     pick.style.setProperty('--book', b.color);
     pick.style.setProperty('--book-ink', b.ink);
     pick.addEventListener('click', () => {
@@ -764,14 +793,14 @@ function createBooksEditor(root, getModel, onChange, onBefore = () => {}) {
 
     doingRow.innerHTML = '';
     (Array.isArray(m.doing) ? m.doing : []).forEach((n) => {
-      const b = BOOKS[n - 1];
+      const b = bookById(n);
       if (!b) return;
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'book-toggle done doing-chip';
       chip.style.setProperty('--book', b.color);
       chip.style.setProperty('--book-ink', b.ink);
-      chip.innerHTML = `L${n}<span class="doing-x" aria-hidden="true">×</span>`;
+      chip.innerHTML = `${bookLabel(n)}<span class="doing-x" aria-hidden="true">×</span>`;
       chip.title = `Haciendo el libro ${n} · clic para quitar`;
       chip.addEventListener('click', () => {
         const mm = getModel();
@@ -840,7 +869,8 @@ function openPersonPop(id) {
   const color = circle ? circle.color : '#94a3b8';
   const age = p.age || p.age === 0 ? `<span class="pop-age">${escapeHtml(p.age)}</span>` : '';
   const obs = p.comments ? `<div class="pop-obs">${escapeHtml(p.comments)}</div>` : '';
-  const doingList = Array.isArray(p.doing) ? p.doing.filter((n) => BOOKS[n - 1]) : [];
+  // en la ventanita solo los libros 1–7; los 8.1–14.3 se ven al abrir el perfil
+  const doingList = Array.isArray(p.doing) ? p.doing.filter((n) => bookById(n)?.main) : [];
   const doing = doingList.length
     ? `<span class="pop-doing"><span class="pop-doing-label">haciendo:</span>${doingList.map((n) => bookChipHtml(n, true)).join('')}</span>`
     : '';
@@ -1465,7 +1495,7 @@ function renderListFilters() {
         ${BOOKS.map((b) => {
           const on = f.books.includes(b.n);
           return `<button type="button" class="book-toggle small${on ? ' done' : ''}" data-act="book" data-n="${b.n}"
-            style="--book:${b.color};--book-ink:${b.ink}" aria-pressed="${on}">L${b.n}</button>`;
+            style="--book:${b.color};--book-ink:${b.ink}" aria-pressed="${on}">${b.label}</button>`;
         }).join('')}
       </div>
       <div class="filter-foot">${booksOp}<span class="filter-hint">${hint}</span></div>`;
@@ -2935,6 +2965,11 @@ function listenToNucleusRealtime(nucleusId) {
       if (entry) { entry.name = nucleusData.name; entry.circles = nucleusData.circles; }
     }
     if (participantsData) {
+      participantsData.forEach((p) => {
+        if (migrateOldBookIds(p)) {
+          Promise.resolve(saveParticipantDoc(nucleusId, p)).catch(() => {});
+        }
+      });
       state.participants = participantsData;
       state.participantsByNucleus[nucleusId] = participantsData;
     }
